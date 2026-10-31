@@ -1,6 +1,6 @@
 # 인프라 · CI/CD
 
-> 담당: 재웅 · 최종 수정 2026-10-30 · ✅ 확정
+> 담당: 재웅 · 최종 수정 2026-10-31 · ✅ 확정
 
 ## 1. 한눈에
 
@@ -27,7 +27,7 @@ flowchart LR
 | 영역 | 선택 | 상태 |
 |---|---|---|
 | 프론트 | React · Vite · TypeScript · Tailwind · PWA | ✅ |
-| 백엔드 | Java 21 · Spring Boot 3 · Maven | ✅ |
+| 백엔드 | Java 21 (LTS) · Spring Boot 4 · Maven (3.5는 2026-06-30 무료 지원 종료라 4로) | ✅ |
 | DB | PostgreSQL · Flyway | ✅ |
 | Jetson · 비서 | Python | ✅ |
 | 개발 도구 | IntelliJ IDEA (학생 라이선스 Ultimate 무료) · `.editorconfig` | ✅ |
