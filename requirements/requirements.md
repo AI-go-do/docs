@@ -140,11 +140,11 @@ flowchart LR
 ```mermaid
 stateDiagram-v2
     [*] --> BOOKED: 예약
-    BOOKED --> CANCELED: 시작 전 취소
+    BOOKED --> CANCELLED: 시작 전 취소
     BOOKED --> IN_USE: 키패드 체크인
     BOOKED --> NO_SHOW: 체크인 없음 (v0.2)
-    IN_USE --> CHECKED_OUT: 퇴실 버튼
-    IN_USE --> AUTO_CHECKED_OUT: 종료 시각 (v0.2)
+    IN_USE --> CHECKED_OUT: 퇴실 버튼, checkout_type MANUAL
+    IN_USE --> CHECKED_OUT: 종료 시각, checkout_type AUTO (v0.2)
 ```
 
 - `BOOKED`·`IN_USE`를 벗어나는 순간 겹침·대표자 제약에서 빠지므로 방과 대표자가 바로 풀린다.
@@ -259,7 +259,7 @@ stateDiagram-v2
   - 상태 `BOOKED`로 만들고 6자리 번호를 함께 발급한다(FR-ACC-001).
   - 예약과 참여자는 한 트랜잭션에서 저장한다.
   - 7일·2시간·30분은 정책 설정값으로 둔다(시범운영 후 3일·14일로 조정 가능하게).
-  - 2시간·30분은 DB `valid_length` CHECK로, 7일은 서버에서 확인한다(요청 시각 기준이라 CHECK로 못 막음).
+  - 2시간·30분은 DB `valid_slot` CHECK로, 7일은 서버에서 확인한다(요청 시각 기준이라 CHECK로 못 막음).
 - **수용 기준**
   - [ ] 조건: 1번 방 오늘 14:00–16:00 비어 있음, 참여자 3명 / 행동: 예약 / 결과: `201`, 상태 `BOOKED`, 번호 발급
   - [ ] 조건: — / 행동: 14:10 시작 / 결과: `400` (30분 단위 아님)
@@ -341,7 +341,7 @@ stateDiagram-v2
 
 - **설명**: 대표자는 시작 전에 예약을 취소할 수 있다. 시작 후에는 취소할 수 없다.
 - **규칙**
-  - 대표자만, `BOOKED`이고 지금이 시작 전일 때만. 상태 `CANCELED`.
+  - 대표자만, `BOOKED`이고 지금이 시작 전일 때만. 상태 `CANCELLED`.
   - 조건부 UPDATE(`WHERE status = 'BOOKED' AND start_at > now()`)로 한 번만 처리한다.
 - **수용 기준**
   - [ ] 조건: 내 예약 내일 14:00 / 행동: 취소 / 결과: `200`, 같은 시간 다른 팀 예약 `201`, 나도 새 예약 `201`
@@ -457,13 +457,16 @@ stateDiagram-v2
 
 | 테이블 | 주요 컬럼 | 제약 |
 |---|---|---|
-| `users` | id, email, name, student_id, verified_at, rules_agreed_version | email·student_id 유일 |
-| `email_verification` | email, code_hash, expires_at, attempts | |
-| `rooms` | id, name, min_people, max_people, is_active | |
-| `reservation` | id, owner_id, room_id, start_at, end_at, status, access_code, checked_in_at, checked_out_at, created_via | `no_room_overlap`, `one_active_per_owner`, `valid_length` |
-| `reservation_participant` | reservation_id, user_id, start_at, end_at, active | 같은 시간 두 방 `EXCLUDE` |
+| `app_user` (`user`는 PostgreSQL 예약어) | id, email, student_no, name, email_verified_at, created_at | email·student_no 유일, 학교 메일 CHECK |
+| `room` | id, name, min_people, max_people | |
+| `room_adjacency` | room_id, adjacent_room_id | 옆 방(신고용) |
+| `reservation` | id, room_id, owner_id, start_at, end_at, headcount, status, is_instant, door_code, checkin_deadline, checked_in_at, checked_out_at, checkout_type(MANUAL/AUTO), cancelled_at, created_at | `no_room_overlap`, `one_active_per_owner`, `valid_slot` |
+| `reservation_participant` | reservation_id, user_id, is_owner, period(tstzrange), active | `no_person_overlap` (같은 시간 두 방 `EXCLUDE`) |
+| `reservation_photo`, `report`, `notification_log` | (v0.2·v0.3) | `schema-v2.sql` 참고 |
 
-- 전체 DDL은 `schema-v2.sql`이 기준이다. 다르면 그쪽을 따르고 이 표를 고친다.
+**아직 schema-v2.sql에 없어서 기능을 붙일 때 새 Flyway 파일로 추가하는 것**: `room.is_active`(FR-ROOM-001), `app_user.rules_agreed_version`(FR-WEB-001), `reservation.created_via`(NFR-COM-008), `email_verification` 테이블(FR-AUTH-001), 같은 방 끝나지 않은 예약끼리 `door_code` 중복 금지(FR-ACC-001).
+
+- 전체 DDL은 `schema-v2.sql`이 기준이다. mspace-core의 `src/main/resources/db/migration/V1__init_schema.sql`이 같은 파일이다. 다르면 그쪽을 따르고 이 표를 고친다.
 
 ### 7.5 v0.1 완료 기준
 
@@ -482,7 +485,7 @@ stateDiagram-v2
 
 | ID | 이름 | 내용 (규칙 v2) |
 |---|---|---|
-| FR-RSV-101 | 자동 퇴실 | 종료 시각에 `IN_USE` → `AUTO_CHECKED_OUT`. 스케줄러 + 조건부 UPDATE |
+| FR-RSV-101 | 자동 퇴실 | 종료 시각에 `IN_USE` → `CHECKED_OUT`(`checkout_type = 'AUTO'`). 스케줄러 + 조건부 UPDATE |
 | FR-RSV-102 | 노쇼 | 미리 예약은 시작 + 15분, 즉시 시작은 누른 뒤 10분 안에 체크인 없으면 `NO_SHOW`, 방 해제 |
 | FR-RSV-103 | 즉시 시작 | 지금 빈 방을 누른 시각부터. 끝은 30분 칸으로 올림(2:17 → 최대 4:30). 10분 안에 키패드. 새 예약 1건 |
 | FR-RSV-104 | 연장 | 다음 예약이 없으면 끝난 뒤 바로 다시 예약(새 예약 1건). 일찍 퇴실 후 다시 즉시 시작해 이어 쓰기 허용 |
@@ -516,7 +519,7 @@ stateDiagram-v2
 
 | ID | 질문 | 기본안 |
 |---|---|---|
-| Q-01 | 즉시 시작(2:17–4:30, 2시간 13분)이 `valid_length` CHECK에 걸린다 | CHECK 조건을 바꾼다 (아래 SQL) |
+| Q-01 | 즉시 시작(2:17–4:30, 2시간 13분)이 2시간 CHECK에 걸린다 | **해결**: `schema-v2.sql`의 `valid_slot`이 즉시 시작 예외를 이미 담고 있다(끝은 30분 단위, 즉시 시작은 2시간 30분 미만). 아래 SQL은 참고용 |
 | Q-02 | 알림을 어디로 보내나? | v0.2는 학교 메일. 폰 푸시는 아이폰 제약이 커서 나중. 텔레그램은 v0.3 |
 | Q-03 | 즉시 시작에도 참여자·최소 인원을 받나? | 받는다. 누르기 전에 참여자 입력 |
 | Q-04 | 대표자가 늦으면 참여자는 못 들어간다 | 대표자가 번호를 공유. 참여자에게도 보여 줄지는 시범운영 후 |
@@ -560,6 +563,7 @@ ALTER TABLE reservation ADD CONSTRAINT valid_length CHECK (
 | v0.2 | 10/30 | 2차 회의: 최대 2시간, 7일, 대표자 1건 |
 | v0.3 | 10/30 | 먼저 배포하고 붙이는 MVP 방식, AI 확장성 |
 | v0.4 | 10/30 | 예약 규칙 v2 반영(메일 인증, 반납 → 퇴실, 취소, 참여자·인원, 자정 넘김, 즉시 시작, 알림, 신고). 왜·어떻게 장 추가. 버전별 범위 재정리. 인프라를 학교 서버로. ID·미결 번호를 순서대로 다시 매김(초안 단계라 가능) |
+| v0.4.1 | 11/2 | 상태·테이블·제약 이름을 `schema-v2.sql`에 맞춤(Q-09): `CANCELLED`, 자동 퇴실은 `CHECKED_OUT` + `checkout_type`, `app_user`·`room`·`door_code`·`valid_slot`. Q-01 해결 |
 
 ---
 
