@@ -1,6 +1,6 @@
 # 팀 컨벤션
 
-> 최종 수정 2026-10-31 · 초안. 팀 확인 후 확정 · 모든 저장소(`core`, `front`, `infra`, `agent`, `docs`)에 적용
+> 최종 수정 2026-10-31 · 초안. 팀 확인 후 확정 · 모든 저장소(`core`, `front`, `infra`, `mspace-assistant`, `docs`)에 적용
 
 **한 줄 요약**: 브랜치는 `feat/…`, 커밋은 `feat: 한국어 설명`, PR에는 요구사항 ID, 오류는 `{code, message}`, DB는 `snake_case`, 시간은 서울 시간 `+09:00`, 비밀값은 절대 커밋하지 않는다.
 
