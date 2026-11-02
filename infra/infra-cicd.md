@@ -29,7 +29,8 @@ flowchart LR
 | 프론트 | React · Vite · TypeScript · Tailwind · PWA | ✅ |
 | 백엔드 | Java 21 (LTS) · Spring Boot 4 · Maven (3.5는 2026-06-30 무료 지원 종료라 4로) | ✅ |
 | DB | PostgreSQL · Flyway | ✅ |
-| Jetson · 비서 | Python | ✅ |
+| Jetson | Python | ✅ |
+| AI 비서 (`mspace-assistant`) | Java 21 · Spring Boot 4 · Maven (core와 같은 스택, 11/2 결정) | ✅ |
 | 개발 도구 | IntelliJ IDEA (학생 라이선스 Ultimate 무료) · `.editorconfig` | ✅ |
 | CI | GitHub Actions · Testcontainers · SonarQube Cloud · CodeRabbit | ✅ |
 | 컨테이너 | Docker · docker compose | ✅ |
@@ -88,7 +89,7 @@ gitGraph
 
 | 저장소 | 담는 것 |
 |---|---|
-| `core`, `front` (나중에 `agent`) | 자기 `Dockerfile`, PR 빌드·테스트 · 이미지 올리기 Actions, 로컬 개발용 compose(DB만) |
+| `core`, `front` (나중에 `mspace-assistant`) | 자기 `Dockerfile`, PR 빌드·테스트 · 이미지 올리기 Actions, 로컬 개발용 compose(DB만) |
 | `infra` | 서버용 compose(개발/시연), nginx 설정, `.env.example`, DB 백업 스크립트, 배포 README |
 
 ## 4. 배포 흐름
@@ -118,7 +119,7 @@ gitGraph
 | 8415 | 시연용 PostgreSQL (외부 노출 안 함) |
 | 8416 | 개발용 PostgreSQL (외부 노출 안 함) |
 
-core·front·agent는 입구 뒤 내부 네트워크로만 연결해 포트를 따로 열지 않는다.
+core·front·mspace-assistant는 입구 뒤 내부 네트워크로만 연결해 포트를 따로 열지 않는다.
 
 다른 팀원은 각자 포트 범위에서 개인 테스트 환경을 띄운다. 접속 정보(계정·비밀번호)는 공개 저장소에 올리지 않고 팀 안에서만 공유한다.
 
