@@ -1,6 +1,6 @@
 # API 명세
 
-> 기준: 2026-11-03 코드. core `develop`(8740166), 로그인은 core PR #37 브랜치 `feat/34-email-login`, 비서는 assistant `feat/39-access-code-card` 브랜치.
+> 기준: 2026-11-03 18:30 코드. core `develop`(102bf46: 로그인 #37, 노쇼·자동 퇴실 #40 포함), 지금 바로 쓰기는 core PR #42 브랜치 `feat/13-instant-start`, 비서는 assistant `feat/39-access-code-card` 브랜치.
 > 근거 요구사항: [요구사항 명세 7.2](../requirements/requirements.md#72-기능-요구사항-목록).
 > 컨벤션에 적힌 springdoc 자동 문서(`/swagger-ui`)가 붙기 전까지는 이 문서가 기준이에요. 코드를 바꾸면 이 문서도 같은 PR에서 고쳐 주세요.
 
@@ -8,15 +8,16 @@
 
 | 누가 부르나 | 메서드 · 주소 | 하는 일 | 요구사항 | 상태 |
 |---|---|---|---|---|
-| 화면 | `POST /api/auth/email-codes` | 학교 메일로 인증번호 보내기 | FR-AUTH-001 | PR 대기 (core #37) |
-| 화면 | `POST /api/auth/login` | 인증번호 확인 → 토큰 받기 | FR-AUTH-001 | PR 대기 (core #37) |
-| 화면 | `POST /api/auth/refresh` | 자동 로그인 (토큰 새로 받기) | FR-AUTH-002 | PR 대기 (core #37) |
-| 화면 | `POST /api/auth/logout` | 로그아웃 | FR-AUTH-002 | PR 대기 (core #37) |
-| nginx | `GET /api/auth/check` | 비서로 넘기기 전 토큰 확인 | FR-AUTH-002 | PR 대기 (core #37) |
+| 화면 | `POST /api/auth/email-codes` | 학교 메일로 인증번호 보내기 | FR-AUTH-001 | ✅ develop |
+| 화면 | `POST /api/auth/login` | 인증번호 확인 → 토큰 받기 | FR-AUTH-001 | ✅ develop |
+| 화면 | `POST /api/auth/refresh` | 자동 로그인 (토큰 새로 받기) | FR-AUTH-002 | ✅ develop |
+| 화면 | `POST /api/auth/logout` | 로그아웃 | FR-AUTH-002 | ✅ develop |
+| nginx | `GET /api/auth/check` | 비서로 넘기기 전 토큰 확인 | FR-AUTH-002 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms` | 방 목록 | FR-ROOM-001 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms/availability?date=` | 하루 30분 칸별 빈방 | FR-WEB-004 | ✅ develop |
 | 화면 · 비서 | `GET /api/members?studentId=` | 참여자 학번 검색 | FR-RSV-004 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations` | 예약 만들기 | FR-RSV-001~005 | ✅ develop |
+| 화면 · 비서 | `POST /api/reservations/instant` | 지금 바로 쓰기 (누른 시각부터) | FR-RSV-103 | PR 대기 (core #42) |
 | 화면 · 비서 | `GET /api/reservations/me` | 내 예약 | FR-RSV-006 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/cancel` | 시작 전 취소 | FR-RSV-007 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/checkout` | 퇴실 | FR-RSV-008 | ✅ develop |
@@ -35,7 +36,7 @@
 | 로그인 | `Authorization: Bearer <accessToken>`. 없거나 틀리면 `401 UNAUTHORIZED` |
 | 개발용 임시 헤더 | `X-User-Id: <회원 id>`. core를 `MSPACE_DEV_HEADER=true`로 띄웠을 때만 받아요. 운영에서는 꺼요. 토큰이 있으면 토큰만 봐요 |
 | 장치 | 키패드는 사람 토큰이 아니라 장치 토큰(`Authorization: Bearer <장치 토큰>`)을 써요 |
-| 시각 | 서울 시간 ISO-8601 `+09:00` (예: `2026-11-03T14:00:00+09:00`). 토큰 만료 시각(`expiresAt`)만 UTC `Z` |
+| 시각 | 서울 시간 ISO-8601 `+09:00` (예: `2026-11-03T14:00:00+09:00`). 토큰 만료 시각(`expiresAt`)만 UTC `Z`. 보낼 때 오프셋이 없으면(`2026-11-03T14:00`) `400 INVALID_REQUEST`, `Z`로 보내면 받고 응답은 `+09:00`으로 줘요 |
 | 예약 칸 | 정각·30분 단위, 1회 최대 2시간, 오늘부터 7일 안 |
 | 오류 본문 | 모두 `{"code": "RESERVATION_TIME_TAKEN", "message": "이미 예약된 시간입니다"}`. 화면은 `message`를 그대로 보여 줘도 돼요 |
 | 형식 오류 | 빠진 값, 숫자가 아닌 id, 깨진 JSON은 `400 INVALID_REQUEST` |
@@ -54,6 +55,7 @@
 |---|---|---|
 | `SCHOOL_EMAIL_ONLY` | 400 | `@chosun.ac.kr`이 아님 |
 | `EMAIL_CODE_TOO_SOON` | 429 | 1분 안에 다시 요청 |
+| `MAIL_SEND_FAILED` | 503 | 메일을 못 보냄 → 잠시 후 다시 |
 
 ### `POST /api/auth/login` 번호 확인 → 토큰
 
@@ -78,6 +80,8 @@
 | `EMAIL_CODE_EXPIRED` | 400 | 10분 지남 |
 | `EMAIL_CODE_MISMATCH` | 400 | 번호 틀림 |
 | `EMAIL_CODE_TOO_MANY_ATTEMPTS` | 400 | 5번 틀림 → 다시 받기 |
+| `SIGNUP_INFO_REQUIRED` | 400 | 처음 로그인인데 `name`·`studentId`가 없음 |
+| `INVALID_SIGNUP_INFO` | 400 | 이름 50자 넘음, 학번이 숫자 20자 이내가 아님 |
 | `STUDENT_ID_TAKEN` | 409 | 다른 메일로 이미 가입된 학번 |
 | `EMAIL_ALREADY_SIGNED_UP` | 409 | 같은 메일로 동시에 가입됨 → 번호 다시 받기 |
 
@@ -178,6 +182,23 @@
 | `IDEMPOTENCY_KEY_REUSED` | 409 | 같은 키를 다른 내용에 씀 |
 | `RESERVATION_BUSY` | 503 | 동시 요청이 몰림 (드묾). 잠시 후 다시 |
 
+만들기 직전에 지난 예약 정리(노쇼·자동 퇴실)를 한 번 돌려요. 그래서 입실 마감이 지난 예약 때문에 `409`가 나지 않아요.
+
+### `POST /api/reservations/instant` 지금 바로 쓰기 — PR 대기 (core #42)
+
+시작은 서버가 정해요(누른 시각, 초 아래 버림). 끝만 보내요. `Idempotency-Key`도 똑같이 받아요(같은 키로 다시 보내면 시작 시각이 달라도 처음 예약을 `200`).
+
+```json
+{ "roomId": 1, "endAt": "2026-11-03T16:30:00+09:00", "participantStudentIds": ["20230002", "20230003"] }
+```
+→ `201`, 응답 모양은 `POST /api/reservations`와 같아요.
+
+- 끝은 30분 칸이고, 최대 (지금 + 2시간)을 30분 칸으로 올린 시각까지예요. 14:17에 누르면 16:30까지 고를 수 있어요.
+- 다음 예약이 있으면 그 전까지만 돼요(아니면 `409 RESERVATION_TIME_TAKEN`).
+- 10분 안에 키패드로 입실하지 않으면 노쇼예요.
+- 오류는 `POST /api/reservations`와 같아요. 다만 끝이 30분 칸이 아니면 `RESERVATION_NOT_ON_SLOT`("끝 시각은 정각 또는 30분이어야 합니다"), 길이가 틀리면 `RESERVATION_INVALID_LENGTH`("지금 바로 쓰기는 지금부터 16:30까지 고를 수 있습니다")가 나가요.
+- 미리 예약에 쓴 `Idempotency-Key`를 여기 다시 쓰면 `409 IDEMPOTENCY_KEY_REUSED`예요.
+
 ### `GET /api/reservations/me` 내 예약
 
 대표자·참여자로 들어간 예약 모두. 끝나지 않은 것이 위(시작 빠른 순), 끝난 것은 최근 순.
@@ -190,9 +211,9 @@
     "participants": [ { "name": "김*영", "owner": true }, { "name": "홍*동", "owner": false } ] }
 ]
 ```
-`accessCode`는 대표자일 때만 값이 있고, 참여자면 `null`.
+`accessCode`는 대표자이고 끝나지 않은 예약(`BOOKED`·`IN_USE`)일 때만 값이 있어요. 참여자이거나, 퇴실·자동 퇴실·취소·노쇼된 예약이면 `null`이에요.
 
-예약 상태(`status`): `BOOKED` 예약됨 → `IN_USE` 입실 → `CHECKED_OUT` 퇴실 / `AUTO_CHECKED_OUT` 시간 끝나 자동 퇴실 / `NO_SHOW` 15분 안 옴 / `CANCELED` 취소.
+예약 상태(`status`): `BOOKED` 예약됨 → `IN_USE` 입실 → `CHECKED_OUT` 퇴실 / `AUTO_CHECKED_OUT` 시간 끝나 자동 퇴실 / `NO_SHOW` 입실 마감까지 안 옴(미리 예약은 시작 + 15분, 지금 바로 쓰기는 누른 뒤 10분. 끝 시각이 먼저 오면 끝 시각) / `CANCELED` 취소. 노쇼·자동 퇴실은 core가 1분마다 바꿔요.
 
 ### `POST /api/reservations/{id}/cancel` 시작 전 취소
 
@@ -221,7 +242,7 @@
 ```json
 { "eventId": "1-48213-18", "roomId": 1, "deviceId": "keypad-1", "code": "123456" }
 ```
-`eventId`(1~64자)는 장치가 누를 때마다 새로 만드는 값이라, 같은 값이 다시 와도 한 번만 처리해요. `deviceId`는 50자 이하(선택).
+`eventId`(1~64자)는 장치가 누를 때마다 새로 만드는 값이라, 같은 값이 다시 와도 한 번만 처리하고 처음 결과를 그대로 돌려줘요. `deviceId`는 50자 이하(선택).
 
 → 거절도 `200`이에요. 장치는 `result`만 보고 LED를 켜요.
 
@@ -229,7 +250,12 @@
 { "result": "OPENED" }
 { "result": "DENIED", "reason": "WRONG_CODE" }
 ```
-`reason`: `WRONG_CODE` 틀림, `NOT_YET` 아직 이름, `LOCKED` 5번 틀려 잠김.
+`reason`: `WRONG_CODE` 틀림, `NOT_YET` 아직 이름(시작 10분 전부터 열림), `LOCKED` 5번 연속 틀려 1분 잠김.
+
+`WRONG_CODE`가 나가는 경우는 이것도 포함해요.
+- 6자리 숫자가 아닌 `code`
+- 끝 시각이 지난 예약, 퇴실·자동 퇴실·취소·노쇼된 예약의 번호
+- 아직 입실 안 했는데 입실 마감(미리 예약 시작 + 15분, 지금 바로 쓰기 누른 뒤 10분)이 지난 번호. 이미 입실한 사람은 끝 시각 전까지 같은 번호로 다시 열 수 있어요
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
