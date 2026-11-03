@@ -1,8 +1,8 @@
-# M-space 예약 시스템 요구사항 명세 (v0.4.3)
+# M-space 예약 시스템 요구사항 명세 (v0.4.4)
 
 | 항목 | 내용 |
 |---|---|
-| 버전 | v0.4.3 |
+| 버전 | v0.4.4 |
 | 작성일 | 2026-10-30 · 최종 수정 2026-11-03 |
 | 상태 | 초안. 팀 확인 후 확정 |
 | 근거 | M-SPACE 예약 규칙 v2(10/30), 1·2차 팀 회의, 학생 설문 |
@@ -596,7 +596,7 @@ stateDiagram-v2
 
 **NFR-COM-008 AI 확장성 5가지**
 1. 기능은 core API로만 연다. OpenAPI 자동 문서가 MCP 도구의 근거가 된다. 비서는 DB에 직접 접근하지 않는다.
-2. 기록에 `created_via`(WEB / AGENT / DEVICE)를 남긴다.
+2. 기록에 `created_via`(WEB / AGENT / DEVICE)를 남긴다. 비서는 예약 만들기 요청에 `X-Client: agent`를 붙이고, 없으면 WEB이다(권한이 아니라 건수 구분용, 권한은 4번). WEB/AGENT 건수는 관리자만 `GET /api/reservations/stats`로 본다(11/3, 영준 요청·지영 결정).
 3. 상태 변경은 도메인 이벤트로 낸다.
 4. JWT scope로 비서 권한을 제한한다.
 5. LLM은 `LlmClient` 뒤에 둔다.
@@ -605,7 +605,7 @@ stateDiagram-v2
 
 | 테이블 | 주요 컬럼 | 제약 |
 |---|---|---|
-| `users` | id, email, name, student_id, verified_at, rules_agreed_version | email·student_id 유일 |
+| `users` | id, email, name, student_id, verified_at, rules_agreed_version, role | email·student_id 유일, role은 USER/ADMIN |
 | `email_verification` | email, code_hash, expires_at, attempts | |
 | `rooms` | id, name, min_people, max_people, is_active | |
 | `reservation` | id, owner_id, room_id, start_at, end_at, status, access_code, checked_in_at, checked_out_at, created_via | `no_room_overlap`, `one_active_per_owner`, `valid_length` |
@@ -647,7 +647,7 @@ stateDiagram-v2
 | FR-RSV-102 | 노쇼 | 미리 예약은 시작 + 15분, 즉시 시작은 누른 뒤 10분 안에 체크인 없으면 `NO_SHOW`, 방 해제 |
 | FR-RSV-103 | 즉시 시작 | 지금 빈 방을 누른 시각부터. 끝은 30분 칸으로 올림(2:17 → 최대 4:30). 10분 안에 키패드. 새 예약 1건 |
 | FR-RSV-104 | 연장 | 사용 중 카드의 "연장하기"(FR-RSV-105)로 한다. 연장은 새 예약 1건이고 **1회만** 된다. 끝난 뒤 따로 다시 예약하면 새 번호로 키패드 체크인을 해야 하고, 30분 안이면 이어진 사용으로 보아 연장 제한이 그대로 적용된다(3.2) |
-| FR-RSV-105 | 연장하기 (제안, core 확인 필요) | `POST /api/reservations/{id}/continue {endAt}` + `Idempotency-Key`. 대표자, `IN_USE`, 종료 10분 전–종료 전, 다음 칸이 비어 있을 때만. `endAt`은 지금 종료 + 30분 단위, 최대 2시간. 한 트랜잭션: 지금 예약 퇴실(조건부 UPDATE) → 지금 시각부터 `endAt`까지 새 예약을 `IN_USE`로 INSERT(`continued_from_id`, 참여자 이어받음). 그 사이 남이 다음 칸을 잡았으면 `409 RESERVATION_TIME_TAKEN`, 전부 롤백되어 지금 예약은 그대로다. 새 번호는 카드에 보여 주되 다시 들어올 때만 쓰고, 예전 번호는 바로 무효. **1회만**: 연장으로 만든 예약(`continued_from_id` 있음)이나 이어진 사용(직전 예약 종료 후 30분 안 같은 대표자)에 이미 연장이 있으면 `409`(코드 이름은 core 담당과 정함, 예: `RESERVATION_EXTENSION_LIMIT`). 일반 예약 생성(`POST /api/reservations`)도 같은 검사를 한다. 횟수·간격은 설정값. 대표자 동시 1건 제약이 있어 같은 대표자의 동시 요청은 하나만 통과한다. 직전 예약 조회용으로 `(owner_id, end_at)` 인덱스 확인 필요. 3.2 비교표 C |
+| FR-RSV-105 | 연장하기 (11/3 넣기로 확정, core 구현 예정) | `POST /api/reservations/{id}/continue {endAt}` + `Idempotency-Key`. 대표자, `IN_USE`, 종료 10분 전–종료 전, 다음 칸이 비어 있을 때만. `endAt`은 지금 종료 + 30분 단위, 최대 2시간. 한 트랜잭션: 지금 예약 퇴실(조건부 UPDATE) → 지금 시각부터 `endAt`까지 새 예약을 `IN_USE`로 INSERT(`continued_from_id`, 참여자 이어받음). 그 사이 남이 다음 칸을 잡았으면 `409 RESERVATION_TIME_TAKEN`, 전부 롤백되어 지금 예약은 그대로다. 새 번호는 카드에 보여 주되 다시 들어올 때만 쓰고, 예전 번호는 바로 무효. **1회만**: 연장으로 만든 예약(`continued_from_id` 있음)이나 이어진 사용(직전 예약 종료 후 30분 안 같은 대표자)에 이미 연장이 있으면 `409 RESERVATION_EXTENSION_LIMIT`(11/3 지영 확정). 일반 예약 생성(`POST /api/reservations`)도 같은 검사를 한다. 횟수·간격은 설정값. 대표자 동시 1건 제약이 있어 같은 대표자의 동시 요청은 하나만 통과한다. 직전 예약 조회용으로 `(owner_id, end_at)` 인덱스 확인 필요. 3.2 비교표 C |
 | FR-NTF-101 | 시작 안내 | 시작 10분 전, 대표자·참여자 전원. "15분 안에 체크인 안 하면 노쇼". 즉시 시작은 안 보냄 |
 | FR-NTF-102 | 퇴실 안내 | 종료 10분 전, 전원. 다음 칸이 비어 있으면 "연장할 수 있어요" |
 | FR-NTF-104 | 노쇼 직전 안내 | 체크인 안 한 예약에 노쇼 5분 전(미리 예약은 시작 + 10분, 즉시 시작은 + 5분) 대표자에게 "5분 안에 키패드에 번호를 넣지 않으면 방이 풀려요". 방 안에서 따로 새 예약을 잡은 경우도 포함 |
@@ -686,7 +686,7 @@ stateDiagram-v2
 | Q-03 | 즉시 시작에도 참여자·최소 인원을 받나? | 받는다. 누르기 전에 참여자 입력 |
 | Q-04 | 대표자가 늦으면 참여자는 못 들어간다 | 대표자가 번호를 공유. 참여자에게도 보여 줄지는 시범운영 후 |
 | Q-05 | "옆 방"은 어떻게 정하나? | 방 테이블에 이웃 방 목록. 현장 배치도(창작실 5→1이 복도를 따라 한 줄) 기준으로 번호가 붙은 방끼리(1–2, 2–3, 3–4, 4–5). 벽이 실제로 붙어 있는지 현장 확인 필요 |
-| Q-06 | 관리자는 누구이고 어떻게 로그인하나? | `role = ADMIN`. 시연은 팀원 계정, 실제는 교학팀 |
+| Q-06 | 관리자는 누구이고 어떻게 로그인하나? | `role = ADMIN`. 시연은 팀원 계정, 실제는 교학팀. core는 `users.role`(USER/ADMIN, 기본 USER)로 둔다(V6, core #45). 지정은 화면이 생기기 전까지 SQL |
 | Q-07 | 남의 학번으로 가입할 수 있다 | 메일 1개 = 학번 1개. 학교 DB 연동은 인터페이스만 |
 | Q-08 | 센서로 "빈 방"이라 볼 기준 시간 | 레이더 연속 없음 15분 → 대표자 확인 알림 → 5분 무응답 시 자동 퇴실 |
 | Q-09 | 기존 코드·`schema-v2.sql`의 API 경로·테이블·상태 이름 | 기존 것 우선, 이 문서를 맞춤 |
@@ -731,6 +731,7 @@ ALTER TABLE reservation ADD CONSTRAINT valid_length CHECK (
 | v0.4.1 | 11/3 | FR-AUTH-002 자동 로그인(refresh 토큰 14일, 액세스 1시간) 추가, FR-AUTH-001 API 경로를 코드와 맞춤 |
 | v0.4.2 | 11/3 | PWA 화면 시안 반영: 음식물 반입 금지(음료 포함)·노쇼 수칙 추가(3.1), 방 이름 "창작실 1–5", FR-WEB-001·002·003 화면 흐름 구체화, FR-WEB-004 홈(배치도+오늘 현황)·005 입실 번호·006 거절 안내 추가, 7.6 화면 디자인 기준, v0.2 FR-NTF-103 앱 알림함·FR-WEB-102 지금 바로 쓰기 화면, v0.3 신고·관리자 화면 구체화, 비서 이름 "스페이시", Q-05 배치도 기준 |
 | v0.4.3 | 11/3 | 3.2 이어 쓰기·퇴실·문 잠김 시나리오(S-1–S-6), 이용 수칙 "문"·"소지품" 추가, FR-ACC-001 끝난 예약 번호 무효·퇴실 ≠ 잠금, NFR-ACC-001 안쪽 열림, Q-12–Q-14. 같은 날 회의 반영: 이어 쓰기 방식 비교(3.2), FR-RSV-105 연장하기(Q-12 결정, 1회·우회 막기), FR-NTF-104 노쇼 직전 안내, Q-13·Q-14 결정 |
+| v0.4.4 | 11/3 | FR-RSV-105 연장하기 확정(1회 초과 `409 RESERVATION_EXTENSION_LIMIT`), NFR-COM-008 비서 예약 표시 `X-Client: agent`·관리자용 WEB/AGENT 건수, Q-06 `users.role` |
 
 ---
 
