@@ -1,6 +1,6 @@
 # API 명세
 
-> 기준: 2026-11-03 18:50 코드. core `develop`(102bf46: 로그인 #37, 노쇼·자동 퇴실 #40 포함), 지금 바로 쓰기는 core PR #42 브랜치 `feat/13-instant-start`, WEB/AGENT 구분·건수는 core PR #45 브랜치 `feat/agent-created-via`, 비서는 assistant `feat/39-access-code-card` 브랜치.
+> 기준: 2026-11-03 18:50 코드. core `develop`(d9724f7: 로그인 #37, 노쇼·자동 퇴실 #40, 지금 바로 쓰기 #42 포함), WEB/AGENT 구분·건수는 core PR #45 브랜치 `feat/agent-created-via`, 비서는 assistant `feat/39-access-code-card` 브랜치.
 > 근거 요구사항: [요구사항 명세 7.2](../requirements/requirements.md#72-기능-요구사항-목록).
 > 컨벤션에 적힌 springdoc 자동 문서(`/swagger-ui`)가 붙기 전까지는 이 문서가 기준이에요. 코드를 바꾸면 이 문서도 같은 PR에서 고쳐 주세요.
 
@@ -17,7 +17,7 @@
 | 화면 · 비서 | `GET /api/rooms/availability?date=` | 하루 30분 칸별 빈방 | FR-WEB-004 | ✅ develop |
 | 화면 · 비서 | `GET /api/members?studentId=` | 참여자 학번 검색 | FR-RSV-004 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations` | 예약 만들기 | FR-RSV-001~005 | ✅ develop |
-| 화면 · 비서 | `POST /api/reservations/instant` | 지금 바로 쓰기 (누른 시각부터) | FR-RSV-103 | PR 대기 (core #42) |
+| 화면 · 비서 | `POST /api/reservations/instant` | 지금 바로 쓰기 (누른 시각부터) | FR-RSV-103 | ✅ develop |
 | 화면 · 비서 | `GET /api/reservations/me` | 내 예약 | FR-RSV-006 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/cancel` | 시작 전 취소 | FR-RSV-007 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/checkout` | 퇴실 | FR-RSV-008 | ✅ develop |
@@ -187,7 +187,7 @@
 
 만들기 직전에 지난 예약 정리(노쇼·자동 퇴실)를 한 번 돌려요. 그래서 입실 마감이 지난 예약 때문에 `409`가 나지 않아요.
 
-### `POST /api/reservations/instant` 지금 바로 쓰기 — PR 대기 (core #42)
+### `POST /api/reservations/instant` 지금 바로 쓰기
 
 시작은 서버가 정해요(누른 시각, 초 아래 버림). 끝만 보내요. `Idempotency-Key`도 똑같이 받아요(같은 키로 다시 보내면 시작 시각이 달라도 처음 예약을 `200`).
 
