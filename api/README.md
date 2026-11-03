@@ -202,7 +202,7 @@
 |---|---|---|
 | `RESERVATION_NOT_FOUND` | 404 | 없거나 내 예약이 아님 |
 | `NOT_RESERVATION_OWNER` | 403 | 참여자가 취소하려 함 |
-| `RESERVATION_NOT_CANCELABLE` | 409 | 이미 시작·끝남·취소됨 |
+| `RESERVATION_NOT_CANCELABLE` | 409 | 이미 시작·끝남·취소됨. `message`가 이유마다 달라요: "이미 취소된 예약입니다" / "이미 시작 시각이 지난 예약은 취소할 수 없습니다" / "사용 중인 예약은 취소할 수 없습니다. 퇴실해 주세요" / "이미 끝난 예약입니다" |
 
 ### `POST /api/reservations/{id}/checkout` 퇴실
 
@@ -271,11 +271,45 @@
 ```json
 { "participantStudentIds": ["20230002", "20230003"] }
 ```
-(예약 만들기 카드일 때만. 나머지는 본문 없음) → core 응답을 상태 코드까지 그대로 돌려줘요(예: 예약 만들기면 5장의 `201` 본문).
+예약 만들기 카드일 때만 본문을 보내요. 학번 수는 카드의 `needsParticipants`와 같아야 해요. 취소·퇴실은 본문 없음.
+
+→ `200` (예약·취소·퇴실 모두 같은 모양. core의 `201` 본문을 그대로 주지 않아요)
+
+```json
+{ "action": "CREATE", "reservationId": 12, "status": "BOOKED", "accessCode": "482913",
+  "replayed": false, "message": "예약했어요." }
+```
+`action`: `CREATE` · `CANCEL` · `CHECKOUT`. `accessCode`는 예약 만들기일 때만 값이 있고 나머지는 `null`. `replayed`가 `true`면 같은 확인이 이미 처리돼 core가 처음 예약을 돌려준 경우예요(멱등 키).
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `CONFIRMATION_NOT_FOUND` | 404 | 없는 토큰이거나 다른 학생의 토큰 |
+| `CONFIRMATION_USED` | 409 | 이미 [확인]한 토큰 (한 번만 쓸 수 있어요) |
+| `CONFIRMATION_EXPIRED` | 410 | 2분 지남 → 비서에게 다시 말하기 |
+| `INVALID_REQUEST` | 400 | 학번 수가 인원과 다르거나 빈 학번. **토큰은 그대로라** 학번만 고쳐 다시 [확인]할 수 있어요 |
+| core 오류 그대로 | 400·403·404·409 | 5장 표의 코드·문장 그대로 (예: `RESERVATION_TIME_TAKEN`, `PARTICIPANT_NOT_FOUND`). 취소 409 `RESERVATION_NOT_CANCELABLE`의 문장은 이유마다 달라요 |
+| `RESERVATION_UNKNOWN` | 503 | 예약 만들기에서 core 응답을 못 받음(같은 키로 한 번 다시 보낸 뒤에도). 됐을 수 있으니 "내 예약에서 확인" 안내 |
+| `STATUS_CHANGE_UNKNOWN` | 503 | 취소·퇴실에서 core 응답을 못 받음. 다시 누르기 전에 내 예약 확인 |
+| `TOOLS_UNAVAILABLE` | 503 | 비서 도구 서버(mcp-server)에 연결 안 됨 |
+
+참여자 학번을 카드에서 받을 때 `GET /api/members?studentId=`(4장)로 이름(가린 이름)을 미리 보여 주면 잘못 넣는 일이 줄어요.
 
 ### `GET /api/agent/reservations/{id}/access-code` 입실 번호 카드
 
-대표자에게만 번호를 줘요. `Cache-Control: no-store`. 오류는 core의 `GET /api/reservations/me`와 같은 기준.
+대표자에게만 번호를 줘요. `Cache-Control: no-store`. → `200`
+
+```json
+{ "reservationId": 12, "roomName": "1번 방", "startAt": "2026-11-03T14:00:00+09:00",
+  "endAt": "2026-11-03T16:00:00+09:00", "accessCode": "482913" }
+```
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `UNAUTHORIZED` | 401 | 로그인 안 함 |
+| `RESERVATION_NOT_FOUND` | 404 | 없거나 내 예약이 아님 |
+| `NOT_RESERVATION_OWNER` | 403 | 참여자 → "대표자에게 문의하세요" |
+| `RESERVATION_FINISHED` | 409 | 이미 끝났거나 취소된 예약 |
+| `ACCESS_CODE_UNAVAILABLE` | 502 | core가 번호를 주지 않음 → 예약 화면에서 확인 |
 
 ## 8. 코드와 문서가 아직 다른 곳
 
@@ -284,4 +318,4 @@
 | `GET /api/rules` | 요구사항에만 있고 코드 없음 | core에 추가 |
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
 | 로그인 API | core PR #37 리뷰 중 | 머지되면 0장 상태 ✅로 |
-| 비서 API | assistant 브랜치(#8 등)만 | develop 머지되면 0장 상태 ✅로 |
+| 비서 API | assistant 브랜치(#8 등)만. 도구(MCP) 쪽 #26·#29는 develop에 머지됨 | develop 머지되면 0장 상태 ✅로 |
