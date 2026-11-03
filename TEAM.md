@@ -57,7 +57,7 @@
 
 - 겹침·대표자 1건은 **DB 제약**으로 막습니다 (`no_room_overlap`, `one_active_per_owner`). 동시 요청 100건에서 중복 0건
 - 숫자(7일·2시간 등)는 코드에 박지 않고 설정값으로 둡니다
-- 상태: `BOOKED` → `IN_USE` → `CHECKED_OUT` / `AUTO_CHECKED_OUT`, 그 밖에 `CANCELED`, `NO_SHOW`
+- 상태: `BOOKED` → `IN_USE` → `CHECKED_OUT` / `AUTO_CHECKED_OUT` / `AWAY_RELEASED`(자리 비움, v0.2), 그 밖에 `CANCELED`, `NO_SHOW`
 
 ## 5. 구조
 
