@@ -318,4 +318,6 @@
 | `GET /api/rules` | 요구사항에만 있고 코드 없음 | core에 추가 |
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
 | 로그인 API | core PR #37 리뷰 중 | 머지되면 0장 상태 ✅로 |
-| 비서 API | assistant 브랜치(#8 등)만. 도구(MCP) 쪽 #26·#29는 develop에 머지됨 | develop 머지되면 0장 상태 ✅로 |
+| 비서 API | 도구(MCP) 쪽 #26·#29, 에이전트 쪽 #31은 develop에 머지됨. #30·#33·#34·#40·#41은 리뷰 중 | 모두 머지되면 0장 상태 ✅로 |
+| `created_via` | core가 모든 예약을 `WEB`으로 저장. 비서 예약을 구분할 방법 없음 | core에 `AGENT` 지정 방법 추가 요청(지영) |
+| 연장 `POST /api/reservations/{id}/continue` | 요구사항 FR-RSV-105(docs PR #17)에만 있음 | core 구현 가능 여부 확인(지영), 되면 비서 `continue_reservation` 도구 추가 |
