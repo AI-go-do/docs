@@ -253,7 +253,7 @@ stateDiagram-v2
     - 서버에는 `JWT_SECRET`(32바이트 이상)을 반드시 넣는다. 비우면 재시작할 때마다 토큰이 무효가 된다(로컬 전용).
     - 운영에서는 `MSPACE_DEV_HEADER=false`. 비서도 `X-User-Id`를 넘기지 않고 `Authorization`만 넘긴다.
     - nginx에서 `/api/auth/` 요청 횟수를 제한한다(인증번호·refresh 막 찌르기 방지).
-    - 토큰은 HTTPS로만 오간다(학교 nginx HTTPS). 로그에 토큰·인증번호 원문을 남기지 않는다.
+    - 토큰은 HTTPS로만 오간다(학교 nginx HTTPS). 로그에 토큰·인증번호 원문을 남기지 않는다. 운영에서는 `MAIL_ENABLED=true`(false면 인증번호가 서버 로그에 찍힘).
     - 화면은 토큰을 다른 사이트 스크립트가 읽지 못하게 한다(외부 스크립트 최소화). 필요하면 refresh 토큰만 `HttpOnly` 쿠키로 옮긴다.
   - 게이트웨이(nginx)는 `/api/agent/`로 넘기기 전에 `auth_request`로 core `GET /api/auth/check`를 불러 토큰을 확인한다. 가짜 토큰으로 비서가 Gemini 무료 한도를 쓰지 않게 하기 위해서다. core는 토큰이 맞으면 `204`, 아니면 `401`.
 - **수용 기준**
