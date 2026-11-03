@@ -38,12 +38,12 @@
 | core → DB | JDBC · SQL |
 | agent → 모델 | `LlmClient` 포트 (Gemini API / Ollama) |
 
-## 그림과 코드가 아직 다른 곳 (2026-11-02)
+## 그림과 코드가 아직 다른 곳 (2026-11-02, core 줄은 11/3 갱신)
 
 | 어디 | 지금 | 맞추는 법 |
 |---|---|---|
-| 로그인 | core에 Security·JWT 없음. MCP는 임시로 `X-User-Id` 헤더를 넘김 | 메일 발송은 가짜 어댑터로 두고 JWT까지 먼저 |
-| 출입 확인 | 중계는 `/api/access/verify`를 부르는데 core에 그 API가 없음 | 요청·응답 모양을 OpenAPI에 먼저 정하고 맞추기 |
+| 로그인 | ✅ 11/3 core에 메일 인증·JWT·refresh 들어감(core #37). `X-User-Id`는 `MSPACE_DEV_HEADER=true`일 때만 받는 개발용 | 비서(MCP)가 학생 토큰을 넘기는지는 영준 확인 필요 |
+| 출입 확인 | ✅ 11/3 core에 `/api/access/verify` 들어감(core #38). 형식은 [API 명세 6장](../api/README.md#6-출입-키패드) | — |
 | 화면 | `mspace-web` 비어 있음, compose에 web 없음 | web 이미지가 생기면 compose·nginx에 추가 |
 | 비서 경로 | nginx가 `/api/`를 전부 core로 보내서 비서에 닿을 수 없음 | `/api/agent/` → agent 경로 추가 |
 | 비서 채널 | 1차 회의는 텔레그램, 비서 설계는 웹 채팅 + 확인 카드 | 시연할 채널 하나 정하기 |
