@@ -1,6 +1,6 @@
 # 팀 컨벤션
 
-> 최종 수정 2026-10-31 · 초안. 팀 확인 후 확정 · 모든 저장소(`core`, `front`, `infra`, `mspace-assistant`, `docs`)에 적용
+> 최종 수정 2026-11-03 (9. 시간대 추가) · 초안. 팀 확인 후 확정 · 모든 저장소(`core`, `front`, `infra`, `mspace-assistant`, `docs`)에 적용
 
 **한 줄 요약**: 브랜치는 `feat/…`, 커밋은 `feat: 한국어 설명`, PR에는 요구사항 ID, 오류는 `{code, message}`, DB는 `snake_case`, 시간은 서울 시간 `+09:00`, 비밀값은 절대 커밋하지 않는다.
 
@@ -14,6 +14,7 @@
 | 6. 프론트 (TS) | 파일·이름·API 타입 | ESLint, Prettier |
 | 7. Jetson (Python) | 이름·포맷 | ruff |
 | 8. 문서 | 마크다운 규칙 | — |
+| 9. 시간대 | 서울 기준·`+09:00`·서버 시간대에 기대지 않기 | `Clock` 주입, 시각 테스트 |
 
 ---
 
@@ -141,7 +142,7 @@ kr.ac.chosun.mspace
 | 숫자 규칙 | 7일·2시간 같은 값은 코드에 박지 않고 설정(`application.yml`)으로 |
 | 예외 | `BusinessException(ErrorCode)` 하나로 던지고, `@RestControllerAdvice` 한 곳에서 `{code, message}`로 바꾼다 |
 | 로그 | `System.out` 금지, `@Slf4j`. 개인정보(메일·학번) 로그에 남기지 않기 |
-| 시간 | `OffsetDateTime`/`Instant` + `Clock` 주입 (테스트에서 시간 고정) |
+| 시간 | `OffsetDateTime`/`Instant` + `Clock` 주입 (테스트에서 시간 고정). 자세한 건 [9. 시간대](#9-시간대) |
 
 ### 테스트
 
@@ -161,7 +162,7 @@ kr.ac.chosun.mspace
 | 주소 | `/api/` + 복수 명사 + kebab-case | `/api/reservations`, `/api/access/verify` |
 | 동작 | 상태를 바꾸는 동작은 `POST /{id}/<동사>` | `POST /api/reservations/7/cancel` |
 | JSON 키 | camelCase | `startAt`, `roomId` |
-| 시간 | ISO-8601, 서울 시간 오프셋 포함 | `2026-11-03T14:00:00+09:00` |
+| 시간 | ISO-8601, 서울 시간 오프셋 포함. [9. 시간대](#9-시간대) | `2026-11-03T14:00:00+09:00` |
 | 성공 | 생성 `201`, 나머지 `200` | |
 | 오류 형식 | `{ "code": "...", "message": "..." }` | |
 | 오류 코드 | UPPER_SNAKE, 영역으로 시작 | `RESERVATION_OVERLAP`, `AUTH_CODE_EXPIRED` |
@@ -233,6 +234,69 @@ kr.ac.chosun.mspace
 | 요구사항 | ID로 부른다 (`FR-RSV-001`) |
 | 상태 표시 | `초안` / `확정` |
 | 비밀값 | 비밀번호·계정·학번 목록은 문서와 저장소에 넣지 않는다 |
+
+---
+
+## 9. 시간대
+
+> 11/3 추가 (4차 회의, 영준). 근거: 비서에서 예약 시각이 9시간 어긋난 사례 2건 (mspace-assistant `docs/트러블슈팅.md` TS-01, TS-04)
+
+**한 줄:** 모든 날짜 계산은 `Asia/Seoul`, 주고받는 시각에는 항상 `+09:00`을 붙이고, 서버의 기본 시간대에 기대지 않는다.
+
+### 왜 필요한가
+
+- Docker 컨테이너와 GitHub Actions는 기본 시간대가 **UTC**다. 노트북은 서울이다. 코드가 "서버 시간대"를 쓰면 노트북에선 맞고 배포 서버에선 9시간 어긋난다
+- 실제로 일어난 일
+  - TS-01: core는 `2026-11-03T14:00:00+09:00`을 줬는데 비서가 읽으면서 `05:00:00Z`(UTC)로 바뀌었다. 같은 순간이지만 AI 모델은 "오전 5시"로 읽는다
+  - TS-04: 모델이 `2026-11-04T14:00`처럼 오프셋 없이 넘겨서 도구가 거절했다
+
+### 타입 고르기 (Java)
+
+| 무엇 | Java | DB | API | 예 |
+|---|---|---|---|---|
+| 한 순간 (예약 시작·종료, 생성·퇴실 시각) | `OffsetDateTime` (계산은 `Instant`도 됨) | `timestamptz` | `2026-11-03T14:00:00+09:00` | `startAt`, `checkedOutAt` |
+| 날짜만 ("오늘", 7일 범위, 빈방 조회 날짜) | `LocalDate` (서울 기준 그날) | `date` | `2026-11-03` | `?date=2026-11-03` |
+| 하루 안의 시각만 (운영 시작 09:00) | `LocalTime` | `time` | `09:00` | 설정값 |
+| 오프셋 없는 날짜+시각 | `LocalDateTime` | **쓰지 않음** (`timestamp` 금지) | **내보내지 않음** | 입력을 받을 때 잠깐만 |
+
+### 규칙
+
+| 항목 | 규칙 |
+|---|---|
+| 기준 시간대 | `ZoneId.of("Asia/Seoul")` 상수 하나로 둔다 (예: `SeoulTime.ZONE`). 문자열을 여기저기 쓰지 않는다 |
+| 지금 시각 | `Clock`을 주입받아 `OffsetDateTime.now(clock)`, `LocalDate.now(clock)`. 인자 없는 `now()`와 `ZoneId.systemDefault()`는 쓰지 않는다 (서버 시간대를 따라감) |
+| `Clock` 빈 | `Clock.system(ZoneId.of("Asia/Seoul"))`. 테스트는 `Clock.fixed(…, Asia/Seoul)` |
+| 날짜 경계 | "오늘", "7일 안", 자정 넘김(23:00–01:00)은 **서울 날짜**로 계산한다. UTC로 계산하면 09시 전까지 날짜가 하루 밀린다 |
+| 응답으로 내보낼 때 | 항상 `+09:00`으로 바꿔서 내보낸다. `Z`(UTC)로 내보내지 않는다. Jackson은 읽을 때 UTC로 바꿔 두므로 DTO를 만들 때 `atZoneSameInstant(SEOUL).toOffsetDateTime()` (설정 한 줄로 바꾸는 방법은 Boot 4·Jackson 3 기준 확인 필요) |
+| 입력을 받을 때 (core API) | 오프셋이 붙은 ISO-8601을 기준으로 한다. 오프셋 없는 값을 거절할지 서울로 볼지는 core가 정한다 (지영 확인 필요) |
+| 입력을 받을 때 (사람·AI가 만든 값) | 화면 입력과 MCP 도구는 오프셋이 없으면 **서울 시간으로 보고 `+09:00`을 붙여서** core에 보낸다. 오프셋이 있으면 그대로 쓴다 |
+| DB | 컬럼은 `timestamptz`. PostgreSQL은 UTC로 저장하고, 읽을 때 순간은 같다. 화면·API 표시는 위 "내보낼 때" 규칙으로 맞춘다 |
+| 서버 시간대 설정 | 코드가 시간대에 기대지 않는 것이 원칙이다. 로그 시각을 읽기 쉽게 하려면 컨테이너에 `TZ=Asia/Seoul`을 둬도 되지만, 이것으로 버그를 가리지 않는다 |
+| 장치 (키패드·센서) | 우노에는 시계가 없다. 장치가 보낸 시각을 믿지 않고 **core가 받은 시각**으로 판단한다 |
+| 프론트 | 서버가 준 `+09:00` 값을 그대로 보여 준다. 날짜를 만들 때는 `Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul' })`처럼 시간대를 적는다. 브라우저 시간대에 기대지 않는다 |
+| 테스트 | 시각이 들어간 테스트는 결과에 `+09:00`이 있는지 확인한다. CI(GitHub Actions)는 UTC라 서버 시간대에 기댄 코드는 CI에서 깨진다. 노트북에서 확인하려면 `-Duser.timezone=UTC`로 한 번 돌린다 |
+
+### 예
+
+```java
+public final class SeoulTime {
+    public static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
+
+    /** 받은 순간을 서울 시각으로 바꾼다. 14:00+09:00 → (Jackson이 05:00Z로 읽음) → 14:00+09:00 */
+    public static OffsetDateTime of(OffsetDateTime t) {
+        return t == null ? null : t.atZoneSameInstant(ZONE).toOffsetDateTime();
+    }
+
+    /** 오프셋이 없으면 서울 시간으로 본다. "2026-11-04T14:00" → 2026-11-04T14:00+09:00 */
+    public static OffsetDateTime parseLenient(String s) {
+        try {
+            return OffsetDateTime.parse(s);
+        } catch (DateTimeParseException e) {
+            return LocalDateTime.parse(s).atZone(ZONE).toOffsetDateTime();
+        }
+    }
+}
+```
 
 ---
 

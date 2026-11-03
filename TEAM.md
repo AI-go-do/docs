@@ -94,7 +94,7 @@ AI 비서·MCP(v0.3) ─▶ core API만 호출
 | 장치 | ESP32·아두이노 (부품 오기 전에는 우노 + 노트북 USB) |
 | Jetson | Python |
 | AI 비서 | Java 21 · Spring Boot 4 · Maven (core와 같은 스택, 11/2 결정) |
-| CI | GitHub Actions · Testcontainers(PostgreSQL, H2 안 씀) · SonarQube Cloud · CodeRabbit(참고용) |
+| CI | GitHub Actions · Testcontainers(PostgreSQL, H2 안 씀) · SonarQube(학교 Community 서버) · CodeRabbit(참고용) |
 | 배포 | Docker · docker compose · GHCR · nginx · 학교 실습 서버 |
 
 ## 7. 작업 방식

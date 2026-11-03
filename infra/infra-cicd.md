@@ -32,7 +32,7 @@ flowchart LR
 | Jetson | Python | ✅ |
 | AI 비서 (`mspace-assistant`) | Java 21 · Spring Boot 4 · Maven (core와 같은 스택, 11/2 결정) | ✅ |
 | 개발 도구 | IntelliJ IDEA (학생 라이선스 Ultimate 무료) · `.editorconfig` | ✅ |
-| CI | GitHub Actions · Testcontainers · SonarQube Cloud · CodeRabbit | ✅ |
+| CI | GitHub Actions · Testcontainers · SonarQube(학교 Community 서버) · CodeRabbit | ✅ |
 | 컨테이너 | Docker · docker compose | ✅ |
 | 이미지 저장소 | GHCR (GitHub Container Registry) | ✅ |
 | 입구 프록시 | nginx (학교 nginx 뒤에 우리 nginx 한 겹) | ✅ |
