@@ -8,17 +8,7 @@
 
 ## 0. 한눈에
 
-```mermaid
-flowchart LR
-    phone["휴대폰 (PWA)"] -- HTTPS --> school["학교 nginx<br/>(compose 밖)"]
-    school -- ":8411 개발 / :8412 시연" --> gw["우리 입구 nginx<br/>gateway"]
-    gw -- "/" --> web["web<br/>정적 파일"]
-    gw -- "/api/*" --> core["core<br/>Spring Boot 4"]
-    core -- JDBC --> db[("PostgreSQL 16")]
-    core -. "SMTP (MAIL_ENABLED)" .-> mail["Gmail"]
-    kp["키패드 + 우노"] -- "USB 시리얼 JSON" --> relay["중계 gateway.py<br/>(노트북)"]
-    relay -- "POST /api/access/verify<br/>장치 토큰" --> school
-```
+맨 위 그림이 MVP 전체예요.
 
 | 서비스 | 저장소 | 실행 위치 | 여는 곳 |
 |---|---|---|---|
@@ -28,6 +18,8 @@ flowchart LR
 | core | `mspace-core` | compose 컨테이너 | 안쪽 `core:8080` |
 | PostgreSQL | `infra` | compose 컨테이너 | 안쪽 `db:5432`, 밖으로 안 염 |
 | 키패드 + 중계 | `mspace-device` | 우노 + 노트북 | 열지 않음 (부르기만) |
+
+서버마다 안쪽 구조는 3장(프론트) · 4장(백엔드) · 6장(디바이스) · 8장(AI 비서, v0.3) 그림에 있어요.
 
 **MVP에서 빠지는 것**: agent · MCP 서버 · 모델(Gemini/Ollama) · 재실 센서 · Jetson. compose에 `mcp`·`agent` 컨테이너가 떠 있어도 입구 nginx에 `/api/agent/` 길이 없어서 v0.1에는 닿지 않아요.
 
@@ -68,13 +60,7 @@ flowchart LR
 
 ## 3. web (PWA)
 
-```mermaid
-flowchart LR
-    subgraph web["web (Vite + React + TS)"]
-      s1["로그인"] --- s2["예약"] --- s3["입실 번호 · 홈"] --- s4["내 예약"]
-    end
-    web -- "fetch('/api/...')<br/>Authorization: Bearer" --> core["core"]
-```
+![프론트 mspace-web 구조](mvp-web.png)
 
 - **제공 API: 없음.** 정적 파일(HTML·JS)만 내요. 같은 주소라 CORS가 필요 없어요.
 - 액세스 토큰은 메모리에만 들고, `Authorization: Bearer`로 보내요.
@@ -92,18 +78,7 @@ flowchart LR
 
 ## 4. core (예약 서버)
 
-```mermaid
-flowchart TB
-    subgraph core["core · 모듈러 모놀리스 (포트·어댑터)"]
-      direction LR
-      m["member<br/>로그인 · 회원"]
-      r["room<br/>방 · 빈방"]
-      v["reservation<br/>예약 · 취소 · 퇴실<br/>+ 1분 정리 스케줄러"]
-      a["access<br/>6자리 번호 확인<br/>5회 잠금"]
-    end
-    core -- "JDBC (Flyway V1~V5)" --> db[("PostgreSQL")]
-    m -. "SMTP · MAIL_ENABLED=true일 때" .-> mail["Gmail"]
-```
+![백엔드 mspace-core 구조](mvp-core.png)
 
 | 모듈 | 하는 일 | 쓰는 테이블 |
 |---|---|---|
@@ -170,17 +145,7 @@ flowchart LR
 
 ## 6. 키패드 + 중계 (`mspace-device`)
 
-```mermaid
-sequenceDiagram
-    participant K as 키패드 · 우노
-    participant G as 중계 gateway.py (노트북)
-    participant C as core
-    K->>G: 시리얼 한 줄 JSON {eventId, roomId, sensorType:"keypad", code}
-    G->>C: POST /api/access/verify (Bearer 장치 토큰, 3초 · 재시도)
-    C-->>G: 200 {result: OPENED | DENIED, reason}
-    G-->>K: "OK" 또는 "NO" 한 줄
-    K->>K: 초록 · 빨강 LED 1.5초
-```
+![디바이스 mspace-device 구조](mvp-device.png)
 
 | 구간 | 형식 | 상태 |
 |---|---|---|
@@ -202,3 +167,17 @@ sequenceDiagram
 | refresh 토큰 쿠키 | core `feat/refresh-cookie` · web #4가 짝. 둘 다 미머지 | core 먼저, 그다음 web #4 | core · web |
 | `GET /api/rules` | 요구사항에만 있음. 화면은 자체 문구로 대신 | MVP는 화면 문구로 가고, core API는 다음 버전 | core |
 | 학교 서버 배포 | 강사님 안내 대기 | 그 전까지 맥 compose로 시험 | infra |
+
+## 8. (참고, v0.3) AI 비서 · `mspace-assistant`
+
+MVP에는 안 들어가지만, 서버별 구조를 한 번에 보려고 같이 그렸어요. 기준은 assistant `develop` b3de9b7이고, 점선은 브랜치에만 있거나 아직 없는 것이에요.
+
+![AI 비서 agent + MCP 서버 구조](assistant-v03.png)
+
+| 서비스 | 여는 것 | 부르는 것 | 상태 |
+|---|---|---|---|
+| agent `:8091` | 비서 채팅 API (ChatController) | `LlmClient` → Gemini API, MCP 서버 `POST /mcp` | 🔶 채팅 API는 브랜치에만 · ✅ Gemini 어댑터 |
+| mcp-server `:8090` | MCP 도구 5개 (`find_available_rooms`, `my_reservations`, `create_reservation`, `cancel_reservation`, `checkout_reservation`), `POST /api/confirmations/{token}` | core `GET /api/rooms/availability`, `GET /api/reservations/me`, `POST /api/reservations`, `POST /api/reservations/{id}/cancel`·`checkout` | ✅ |
+
+- 쓰기 도구는 바로 실행하지 않고 확인안(2분 유효)을 만든 뒤, 확인 API로 한 번만 실행해요.
+- mcp-server는 받은 `Authorization`을 core에 그대로 넘겨요. 설정에 `X-User-Id`도 넘기게 남아 있어서, 운영에서는 `Authorization`만 남기는 게 맞아요.
