@@ -106,7 +106,7 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
 | 키패드 + 우노 | `mspace-device` | Arduino | 6자리 + `#` 입력, 초록·빨강 LED |
 | 중계 gateway.py | `mspace-device` | Python | 입력을 `POST /api/access/verify`로 전달. 나중에 Jetson 보드 B로 옮김 |
 | 재실 센서 (v0.2) | `mspace-device` | PIR · 조도 · 레이더 · CO2 | 빈 방 판단 보조 |
-| AI 모델 | (외부) | `LlmClient` 포트 + 어댑터 | Gemini 어댑터만 develop에 있음. Ollama는 브랜치(#34), Claude는 팀이 정하면 추가. 도구 결과에 학번·입실 번호는 안 넣음 |
+| Gemini / Ollama | (외부) | `LlmClient` 포트 + 어댑터 2개 | Gemini는 시연용, Ollama는 로컬(보드 B 후보). 학번은 모델로 보내지 않음. (11-04 코드: develop에는 Gemini 어댑터만, Ollama는 브랜치 #34) |
 | GitHub Actions → GHCR | 각 저장소 `.github` | Actions · GHCR | 빌드·테스트 → 이미지 → SSH로 학교 서버에 배포. 서버 배포는 `DEPLOY_ENABLED`를 켠 뒤부터 ([인프라 · CI/CD](../infra/infra-cicd.md)) |
 
 ## AI 비서는 저장소 하나, 컨테이너 둘 (v0.3)
@@ -120,7 +120,7 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
 | 아는 것 | 모델과 대화하는 법 | core API, 예약 규칙, 확인 카드 |
 
 - **나눈 이유 1**: 모델이 core를 직접 못 건드리게 해요. 모델은 MCP 도구만 쓸 수 있고, 쓰기 작업은 학생이 확인 버튼을 눌러야만 실행돼요.
-- **나눈 이유 2**: MCP는 표준 규격이라, 다른 비서(Claude 등)를 붙여도 같은 도구를 그대로 써요.
+- **나눈 이유 2**: MCP는 표준 규격이라, 모델이나 비서를 바꿔도 같은 도구를 그대로 써요.
 - 그림에서는 두 상자를 점선 테두리 `mspace-assistant`로 묶어 하나의 서비스임을 보여요.
 
 ## 누가 누구를 어떻게 부르나
