@@ -26,7 +26,8 @@
 | 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | PR 대기 (core #52) |
 | 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ❌ 아직 없음 |
-| 화면 | `POST /api/agent/chat` | 비서와 대화 | FR-AGT | 브랜치 (assistant) |
+| 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT | 브랜치 (assistant) |
+| 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT | 브랜치 (assistant) |
 | 화면 | `POST /api/agent/confirmations/{token}` | 확인 카드 [확인] | FR-AGT | 브랜치 (assistant) |
 | 화면 | `GET /api/agent/reservations/{id}/access-code` | 비서 입실 번호 카드 | FR-AGT | 브랜치 (assistant) |
 
@@ -316,31 +317,55 @@
 
 비서 서버는 받은 `Authorization`을 그대로 core에 넘겨요. 그래서 비서도 학생 본인 권한만큼만 할 수 있어요.
 
-### `POST /api/agent/chat` 대화
+### `POST /api/agent/chat` 대화 접수 → `GET /api/agent/chat/{jobId}` 결과 조회 (폴링)
+
+비서는 답을 만드는 데 몇 초~45초가 걸려서, **보내면 바로 접수 번호를 주고 화면이 결과를 조회**해요 (5차 회의 결정, 웹소켓 대신 폴링). 요청 하나가 짧아 nginx 제한 시간(60초)에 걸리지 않아요.
 
 ```json
 { "message": "내일 2시에 빈방 있어?", "history": [ { "role": "user", "text": "..." }, { "role": "assistant", "text": "..." } ] }
 ```
-→ `200`
+→ `202`, `Location: /api/agent/chat/j_…`
+
+```json
+{ "jobId": "j_Q2x...", "status": "PENDING", "pollAfterMs": 1000 }
+```
+
+화면은 `pollAfterMs`마다 `GET /api/agent/chat/{jobId}`를 불러요. 아직이면 `200 { "jobId": "...", "status": "PENDING", "pollAfterMs": 1000 }`, 끝나면:
 
 ```json
 {
-  "reply": "내일 14:00에 1번 방, 2번 방이 비어 있어요. 예약할까요?",
-  "confirmations": [ { "tool": "create_reservation", "token": "c_9f2...", "summary": "1번 방 · 11/4 14:00–16:00",
-                       "notes": [], "needsParticipants": 2, "expiresAt": "2026-11-03T16:10:00+09:00" } ],
-  "accessCodeCards": [ { "reservationId": 12 } ],
-  "toolCalls": 2, "stoppedByLimit": false
+  "jobId": "j_Q2x...",
+  "status": "DONE",
+  "result": {
+    "reply": "내일 14:00에 1번 방, 2번 방이 비어 있어요. 예약할까요?",
+    "confirmations": [ { "tool": "create_reservation", "token": "c_9f2...", "summary": "1번 방 · 11/4 14:00–16:00",
+                         "notes": [], "needsParticipants": 2, "expiresAt": "2026-11-03T16:10:00+09:00" } ],
+    "accessCodeCards": [ { "reservationId": 12 } ],
+    "toolCalls": 2, "stoppedByLimit": false
+  },
+  "error": null
 }
 ```
+실패하면 `200 { "status": "FAILED", "result": null, "error": { "code": "LLM_RATE_LIMITED", "message": "..." } }`. `error.message`를 그대로 보여 주면 돼요.
+
 쓰기(예약·취소·퇴실)는 바로 하지 않고 확인 카드(`confirmations`)로 돌려줘요. 입실 번호는 모델에 보내지 않아서 `accessCodeCards`에는 예약 id만 있어요.
 
-| 오류 | 상태 | 언제 |
-|---|---|---|
-| `UNAUTHORIZED` | 401 | 로그인 안 함 |
-| `INVALID_REQUEST` | 400 | 빈 말, 깨진 대화 기록 |
-| `LLM_RATE_LIMITED` | 429 | Gemini 무료 한도 |
-| `LLM_UNAVAILABLE`, `LLM_NOT_CONFIGURED` | 503 | LLM 응답 없음, 키 설정 안 됨 |
-| `TOOLS_UNAVAILABLE` | 503 | MCP 서버 연결 안 됨 |
+- 결과에는 확인 토큰이 들어 있어서 **접수한 학생만** 볼 수 있어요. 남의 `jobId`는 없는 것과 같은 `404`. 응답은 `Cache-Control: no-store`
+- 끝난 결과는 5분 보관해요. 그 뒤에는 `404`라 다시 보내야 해요
+- 화면은 90초 넘게 `PENDING`이면 조회를 멈추고 다시 보내 달라고 안내해요 (비서 기한 45초 + 여유)
+- 학생 한 명은 동시에 한 건만 보내요. 앞 답이 오기 전에 보내면 `409`
+
+| 오류 | 상태 | 어디서 | 언제 |
+|---|---|---|---|
+| `UNAUTHORIZED` | 401 | 접수·조회 | 로그인 안 함 |
+| `INVALID_REQUEST` | 400 | 접수 | 빈 말, 너무 긴 말(1,000자), 깨진 대화 기록 |
+| `CHAT_IN_PROGRESS` | 409 | 접수 | 같은 학생의 앞 질문에 아직 답하는 중 |
+| `AGENT_BUSY` | 503 | 접수 | 비서 서버 대기열이 가득 참. 잠시 뒤 다시 |
+| `CHAT_JOB_NOT_FOUND` | 404 | 조회 | 없는 번호, 남의 번호, 보관 시간(5분) 지남 |
+| `LLM_RATE_LIMITED` | `error.code` | 조회(`FAILED`) | Gemini 무료 한도 |
+| `LLM_UNAVAILABLE`, `LLM_NOT_CONFIGURED` | `error.code` | 조회(`FAILED`) | LLM 응답 없음, 키 설정 안 됨 |
+| `TOOLS_UNAVAILABLE` | `error.code` | 조회(`FAILED`) | MCP 서버 연결 안 됨 |
+| `AGENT_FAILED` | `error.code` | 조회(`FAILED`) | 그 밖의 오류 |
 
 ### `POST /api/agent/confirmations/{token}` 확인 카드 [확인]
 
