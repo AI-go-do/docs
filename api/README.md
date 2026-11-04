@@ -1,6 +1,6 @@
 # API 명세
 
-> 기준: 2026-11-03 18:30 코드. core `develop`(102bf46: 로그인 #37, 노쇼·자동 퇴실 #40 포함), 지금 바로 쓰기는 core PR #42 브랜치 `feat/13-instant-start`, 비서는 assistant `feat/39-access-code-card` 브랜치.
+> 기준: 2026-11-03 18:50 코드. core `develop`(d9724f7: 로그인 #37, 노쇼·자동 퇴실 #40, 지금 바로 쓰기 #42 포함), WEB/AGENT 구분·건수는 core PR #45 브랜치 `feat/agent-created-via`, 비서는 assistant `feat/39-access-code-card` 브랜치.
 > 근거 요구사항: [요구사항 명세 7.2](../requirements/requirements.md#72-기능-요구사항-목록).
 > 컨벤션에 적힌 springdoc 자동 문서(`/swagger-ui`)가 붙기 전까지는 이 문서가 기준이에요. 코드를 바꾸면 이 문서도 같은 PR에서 고쳐 주세요.
 
@@ -17,10 +17,12 @@
 | 화면 · 비서 | `GET /api/rooms/availability?date=` | 하루 30분 칸별 빈방 | FR-WEB-004 | ✅ develop |
 | 화면 · 비서 | `GET /api/members?studentId=` | 참여자 학번 검색 | FR-RSV-004 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations` | 예약 만들기 | FR-RSV-001~005 | ✅ develop |
-| 화면 · 비서 | `POST /api/reservations/instant` | 지금 바로 쓰기 (누른 시각부터) | FR-RSV-103 | PR 대기 (core #42) |
+| 화면 · 비서 | `POST /api/reservations/instant` | 지금 바로 쓰기 (누른 시각부터) | FR-RSV-103 | ✅ develop |
 | 화면 · 비서 | `GET /api/reservations/me` | 내 예약 | FR-RSV-006 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/cancel` | 시작 전 취소 | FR-RSV-007 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/checkout` | 퇴실 | FR-RSV-008 | ✅ develop |
+| 화면 · 비서 | `POST /api/reservations/{id}/continue` | 연장하기 (1회) | FR-RSV-105 | ❌ 아직 없음 (core 구현 예정) |
+| 관리자 | `GET /api/reservations/stats` | WEB/AGENT 예약 건수 | NFR-COM-008 | PR 대기 (core #45) |
 | 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ❌ 아직 없음 |
 | 화면 | `POST /api/agent/chat` | 비서와 대화 | FR-AGT | 브랜치 (assistant) |
@@ -35,6 +37,7 @@
 |---|---|
 | 로그인 | `Authorization: Bearer <accessToken>`. 없거나 틀리면 `401 UNAUTHORIZED` |
 | 개발용 임시 헤더 | `X-User-Id: <회원 id>`. core를 `MSPACE_DEV_HEADER=true`로 띄웠을 때만 받아요. 운영에서는 꺼요. 토큰이 있으면 토큰만 봐요 |
+| 만든 곳 | 비서는 예약 만들기(`POST /api/reservations`, `/instant`)에 `X-Created-Via: AGENT`를 붙여요. 그러면 `created_via = AGENT`, 없으면 `WEB`. 대소문자와 앞뒤 공백은 무시해요(` agent `도 AGENT). `WEB`·`AGENT` 말고 다른 값이면 `400 INVALID_REQUEST`. 건수를 따로 세는 표시일 뿐 권한과는 상관없어요 (core #45) |
 | 장치 | 키패드는 사람 토큰이 아니라 장치 토큰(`Authorization: Bearer <장치 토큰>`)을 써요 |
 | 시각 | 서울 시간 ISO-8601 `+09:00` (예: `2026-11-03T14:00:00+09:00`). 토큰 만료 시각(`expiresAt`)만 UTC `Z`. 보낼 때 오프셋이 없으면(`2026-11-03T14:00`) `400 INVALID_REQUEST`, `Z`로 보내면 받고 응답은 `+09:00`으로 줘요 |
 | 예약 칸 | 정각·30분 단위, 1회 최대 2시간, 오늘부터 7일 안 |
@@ -184,7 +187,7 @@
 
 만들기 직전에 지난 예약 정리(노쇼·자동 퇴실)를 한 번 돌려요. 그래서 입실 마감이 지난 예약 때문에 `409`가 나지 않아요.
 
-### `POST /api/reservations/instant` 지금 바로 쓰기 — PR 대기 (core #42)
+### `POST /api/reservations/instant` 지금 바로 쓰기
 
 시작은 서버가 정해요(누른 시각, 초 아래 버림). 끝만 보내요. `Idempotency-Key`도 똑같이 받아요(같은 키로 다시 보내면 시작 시각이 달라도 처음 예약을 `200`).
 
@@ -234,6 +237,27 @@
 | `RESERVATION_NOT_FOUND` | 404 | 없거나 내 예약이 아님 |
 | `NOT_RESERVATION_OWNER` | 403 | 참여자가 퇴실하려 함 |
 | `RESERVATION_NOT_IN_USE` | 409 | 입실 전이거나 이미 끝남 |
+
+### `POST /api/reservations/{id}/continue` 연장하기 — 아직 없음 (core 구현 예정)
+
+형식은 [요구사항 FR-RSV-105](../requirements/requirements.md#72-기능-요구사항-목록) 그대로 만들어요. 1회를 넘기면 `409 RESERVATION_EXTENSION_LIMIT`(11/3 지영 확정). 구현되면 이 절을 채워요.
+
+### `GET /api/reservations/stats?from=2026-11-01&to=2026-11-30` 예약 건수 — 관리자만, PR 대기 (core #45)
+
+예약을 **만든 날**(서울 날짜, 양 끝 포함) 기준으로 WEB/AGENT를 따로 세요. 노쇼·취소된 예약도 만든 건수에 들어가요. `from`·`to`를 빼면 처음부터·지금까지 전부이고, 응답의 `from`·`to`도 `null`이에요. 숫자만 나오고 누가·어느 방인지는 안 나와요.
+
+→ `200`
+```json
+{ "from": "2026-11-01", "to": "2026-11-30", "total": 42, "web": 35, "agent": 7 }
+```
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | 날짜 모양이 틀림(`YYYY-MM-DD` 아님), `from`이 `to`보다 늦음, 연도가 2000–2100 밖 |
+| `UNAUTHORIZED` | 401 | 로그인 안 함 |
+| `ADMIN_ONLY` | 403 | 관리자(`users.role = ADMIN`)가 아님 |
+
+관리자 지정은 아직 화면이 없어 SQL로 해요: `UPDATE users SET role = 'ADMIN' WHERE email = '...'` (core V6).
 
 ## 6. 출입 (키패드)
 
@@ -343,9 +367,8 @@
 |---|---|---|
 | `GET /api/rules` | 요구사항에만 있고 코드 없음 | core에 추가 |
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
-| 로그인 API | core PR #37 리뷰 중 | 머지되면 0장 상태 ✅로 |
 | 비서 API | 도구(MCP) 쪽 #26·#29, 에이전트 쪽 #31은 develop에 머지됨. #30·#33·#34·#40·#41은 리뷰 중 | 모두 머지되면 0장 상태 ✅로 |
-| `created_via` | core가 모든 예약을 `WEB`으로 저장. 비서 예약을 구분할 방법 없음 | core에 `AGENT` 지정 방법 추가 요청(지영) |
-| 연장 `POST /api/reservations/{id}/continue` | 요구사항 FR-RSV-105(docs PR #17)에만 있음 | core 구현 가능 여부 확인(지영), 되면 비서 `continue_reservation` 도구 추가 |
+| `created_via` | core PR #45: `X-Created-Via: AGENT`면 AGENT로 저장 | #45 머지 뒤 비서(MCP)가 core 호출에 `X-Created-Via: AGENT`를 붙이기(영준) |
+| 연장 `POST /api/reservations/{id}/continue` | 요구사항 FR-RSV-105에만 있음. 11/3 넣기로 확정, 1회 초과 오류 `RESERVATION_EXTENSION_LIMIT` | core 구현(지영), 되면 비서 `continue_reservation` 도구 추가(영준) |
 | 자리 비움 `AWAY_RELEASED` (v0.2) | 요구사항 FR-DEV-103(11/3 회의 결정)에만 있음 | core에 상태 추가, 10·15분 판단 스케줄러, 30일 3번 = 노쇼 1번 계산(지영·수연) |
 | 재실 센서 이벤트 API | 명세 없음. 장치는 있음↔없음이 바뀔 때만 eventId를 붙여 보냄(FR-DEV-101) | 경로·형식·장치 토큰 정하기, 예: `POST /api/sensor-events`(지영·수연) |
