@@ -601,7 +601,7 @@ stateDiagram-v2
 
 **NFR-COM-008 AI 확장성 5가지**
 1. 기능은 core API로만 연다. OpenAPI 자동 문서가 MCP 도구의 근거가 된다. 비서는 DB에 직접 접근하지 않는다.
-2. 기록에 `created_via`(WEB / AGENT / DEVICE)를 남긴다. 비서는 예약 만들기 요청에 `X-Client: agent`를 붙이고, 없으면 WEB이다(권한이 아니라 건수 구분용, 권한은 4번). WEB/AGENT 건수는 관리자만 `GET /api/reservations/stats`로 본다(11/3, 영준 요청·지영 결정). 쓰는 사람은 관리자, 쓰임은 비서 작업 숫자(발표용)다. 관리자 화면(FR-WEB-101)에 붙일지는 아직 정하지 않았다. 수용 기준: 관리자가 아니면 `403 ADMIN_ONLY`, 로그인 안 하면 `401`.
+2. 기록에 `created_via`(WEB / AGENT / DEVICE)를 남긴다. 비서는 예약 만들기 요청에 `X-Created-Via: AGENT`를 붙이고, 없으면 WEB이다(권한이 아니라 건수 구분용, 권한은 4번). WEB/AGENT 건수는 관리자만 `GET /api/reservations/stats`로 본다(11/3, 영준 요청·지영 결정). 쓰는 사람은 관리자, 쓰임은 비서 작업 숫자(발표용)다. 관리자 화면(FR-WEB-101)에 붙일지는 아직 정하지 않았다. 수용 기준: 관리자가 아니면 `403 ADMIN_ONLY`, 로그인 안 하면 `401`.
 3. 상태 변경은 도메인 이벤트로 낸다.
 4. JWT scope로 비서 권한을 제한한다.
 5. LLM은 `LlmClient` 뒤에 둔다.
@@ -738,7 +738,7 @@ ALTER TABLE reservation ADD CONSTRAINT valid_length CHECK (
 | v0.4.3 | 11/3 | 3.2 이어 쓰기·퇴실·문 잠김 시나리오(S-1–S-6), 이용 수칙 "문"·"소지품" 추가, FR-ACC-001 끝난 예약 번호 무효·퇴실 ≠ 잠금, NFR-ACC-001 안쪽 열림, Q-12–Q-14. 같은 날 회의 반영: 이어 쓰기 방식 비교(3.2), FR-RSV-105 연장하기(Q-12 결정, 1회·우회 막기), FR-NTF-104 노쇼 직전 안내, Q-13·Q-14 결정 |
 | v0.4.4 | 11/3 | 회의 반영: FR-DEV-103 자리 비움 자동 퇴실(10분 알림·15분 퇴실, 30일 3번 = 노쇼 1번, 실제 서비스 "아직 있어요" 없음), 상태 `AWAY_RELEASED` 추가(4장 상태도·FR-ACC-001), 이용 수칙·용어 "자리 비움", FR-NTF-103 버튼, Q-08 결정 |
 | v0.4.5 | 11/3 | 3·4차 회의 반영 점검: 근거에 1–4차 회의, FR-ACC-001에 `eventId`·`deviceId`·장치별 토큰·중복 입력 한 번만 처리·거절도 `200`(core 코드와 맞춤) |
-| v0.4.6 | 11/3 | FR-RSV-105 연장 오류 코드 확정(1회 초과 `409 RESERVATION_EXTENSION_LIMIT`), NFR-COM-008 `X-Client`·관리자 건수 API, Q-06 `users.role` |
+| v0.4.6 | 11/3 | FR-RSV-105 연장 오류 코드 확정(1회 초과 `409 RESERVATION_EXTENSION_LIMIT`), NFR-COM-008 `X-Created-Via`·관리자 건수 API, Q-06 `users.role` |
 
 ---
 

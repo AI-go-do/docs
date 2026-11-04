@@ -37,7 +37,7 @@
 |---|---|
 | 로그인 | `Authorization: Bearer <accessToken>`. 없거나 틀리면 `401 UNAUTHORIZED` |
 | 개발용 임시 헤더 | `X-User-Id: <회원 id>`. core를 `MSPACE_DEV_HEADER=true`로 띄웠을 때만 받아요. 운영에서는 꺼요. 토큰이 있으면 토큰만 봐요 |
-| 만든 곳 | 비서는 예약 만들기(`POST /api/reservations`, `/instant`)에 `X-Client: agent`를 붙여요. 그러면 `created_via = AGENT`, 없으면 `WEB`. 대소문자와 앞뒤 공백은 무시해요(` Agent `도 AGENT). `web`·`agent` 말고 다른 값이면 `400 INVALID_REQUEST`. 건수를 따로 세는 표시일 뿐 권한과는 상관없어요 (core #45) |
+| 만든 곳 | 비서는 예약 만들기(`POST /api/reservations`, `/instant`)에 `X-Created-Via: AGENT`를 붙여요. 그러면 `created_via = AGENT`, 없으면 `WEB`. 대소문자와 앞뒤 공백은 무시해요(` agent `도 AGENT). `WEB`·`AGENT` 말고 다른 값이면 `400 INVALID_REQUEST`. 건수를 따로 세는 표시일 뿐 권한과는 상관없어요 (core #45) |
 | 장치 | 키패드는 사람 토큰이 아니라 장치 토큰(`Authorization: Bearer <장치 토큰>`)을 써요 |
 | 시각 | 서울 시간 ISO-8601 `+09:00` (예: `2026-11-03T14:00:00+09:00`). 토큰 만료 시각(`expiresAt`)만 UTC `Z`. 보낼 때 오프셋이 없으면(`2026-11-03T14:00`) `400 INVALID_REQUEST`, `Z`로 보내면 받고 응답은 `+09:00`으로 줘요 |
 | 예약 칸 | 정각·30분 단위, 1회 최대 2시간, 오늘부터 7일 안 |
@@ -368,7 +368,7 @@
 | `GET /api/rules` | 요구사항에만 있고 코드 없음 | core에 추가 |
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
 | 비서 API | 도구(MCP) 쪽 #26·#29, 에이전트 쪽 #31은 develop에 머지됨. #30·#33·#34·#40·#41은 리뷰 중 | 모두 머지되면 0장 상태 ✅로 |
-| `created_via` | core PR #45: `X-Client: agent`면 AGENT로 저장 | #45 머지 뒤 비서(MCP)가 core 호출에 `X-Client: agent`를 붙이기(영준) |
+| `created_via` | core PR #45: `X-Created-Via: AGENT`면 AGENT로 저장 | #45 머지 뒤 비서(MCP)가 core 호출에 `X-Created-Via: AGENT`를 붙이기(영준) |
 | 연장 `POST /api/reservations/{id}/continue` | 요구사항 FR-RSV-105에만 있음. 11/3 넣기로 확정, 1회 초과 오류 `RESERVATION_EXTENSION_LIMIT` | core 구현(지영), 되면 비서 `continue_reservation` 도구 추가(영준) |
 | 자리 비움 `AWAY_RELEASED` (v0.2) | 요구사항 FR-DEV-103(11/3 회의 결정)에만 있음 | core에 상태 추가, 10·15분 판단 스케줄러, 30일 3번 = 노쇼 1번 계산(지영·수연) |
 | 재실 센서 이벤트 API | 명세 없음. 장치는 있음↔없음이 바뀔 때만 eventId를 붙여 보냄(FR-DEV-101) | 경로·형식·장치 토큰 정하기, 예: `POST /api/sensor-events`(지영·수연) |
