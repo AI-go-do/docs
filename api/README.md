@@ -37,7 +37,7 @@
 |---|---|
 | 로그인 | `Authorization: Bearer <accessToken>`. 없거나 틀리면 `401 UNAUTHORIZED` |
 | 개발용 임시 헤더 | `X-User-Id: <회원 id>`. core를 `MSPACE_DEV_HEADER=true`로 띄웠을 때만 받아요. 운영에서는 꺼요. 토큰이 있으면 토큰만 봐요 |
-| 만든 곳 | 비서는 예약 만들기(`POST /api/reservations`, `/instant`)에 `X-Client: agent`를 붙여요. 그러면 `created_via = AGENT`, 없으면 `WEB`. `web`·`agent` 말고 다른 값이면 `400 INVALID_REQUEST`. 건수를 따로 세는 표시일 뿐 권한과는 상관없어요 (core #45) |
+| 만든 곳 | 비서는 예약 만들기(`POST /api/reservations`, `/instant`)에 `X-Client: agent`를 붙여요. 그러면 `created_via = AGENT`, 없으면 `WEB`. 대소문자와 앞뒤 공백은 무시해요(` Agent `도 AGENT). `web`·`agent` 말고 다른 값이면 `400 INVALID_REQUEST`. 건수를 따로 세는 표시일 뿐 권한과는 상관없어요 (core #45) |
 | 장치 | 키패드는 사람 토큰이 아니라 장치 토큰(`Authorization: Bearer <장치 토큰>`)을 써요 |
 | 시각 | 서울 시간 ISO-8601 `+09:00` (예: `2026-11-03T14:00:00+09:00`). 토큰 만료 시각(`expiresAt`)만 UTC `Z`. 보낼 때 오프셋이 없으면(`2026-11-03T14:00`) `400 INVALID_REQUEST`, `Z`로 보내면 받고 응답은 `+09:00`으로 줘요 |
 | 예약 칸 | 정각·30분 단위, 1회 최대 2시간, 오늘부터 7일 안 |
@@ -214,9 +214,9 @@
     "participants": [ { "name": "김*영", "owner": true }, { "name": "홍*동", "owner": false } ] }
 ]
 ```
-`accessCode`는 대표자이고 끝나지 않은 예약(`BOOKED`·`IN_USE`)일 때만 값이 있어요. 참여자이거나, 퇴실·자동 퇴실·취소·노쇼된 예약이면 `null`이에요.
+`accessCode`는 대표자이고 끝나지 않은 예약(`BOOKED`·`IN_USE`)일 때만 값이 있어요. 참여자이거나, 퇴실·자동 퇴실·자리 비움 퇴실·취소·노쇼된 예약이면 `null`이에요.
 
-예약 상태(`status`): `BOOKED` 예약됨 → `IN_USE` 입실 → `CHECKED_OUT` 퇴실 / `AUTO_CHECKED_OUT` 시간 끝나 자동 퇴실 / `NO_SHOW` 입실 마감까지 안 옴(미리 예약은 시작 + 15분, 지금 바로 쓰기는 누른 뒤 10분. 끝 시각이 먼저 오면 끝 시각) / `CANCELED` 취소. 노쇼·자동 퇴실은 core가 1분마다 바꿔요.
+예약 상태(`status`): `BOOKED` 예약됨 → `IN_USE` 입실 → `CHECKED_OUT` 퇴실 / `AUTO_CHECKED_OUT` 시간 끝나 자동 퇴실 / `AWAY_RELEASED` 자리 비움 자동 퇴실(재실 센서 15분 비어 있음, v0.2 FR-DEV-103) / `NO_SHOW` 입실 마감까지 안 옴(미리 예약은 시작 + 15분, 지금 바로 쓰기는 누른 뒤 10분. 끝 시각이 먼저 오면 끝 시각) / `CANCELED` 취소. 노쇼·자동 퇴실은 core가 1분마다 바꿔요.
 
 ### `POST /api/reservations/{id}/cancel` 시작 전 취소
 
@@ -244,7 +244,7 @@
 
 ### `GET /api/reservations/stats?from=2026-11-01&to=2026-11-30` 예약 건수 — 관리자만, PR 대기 (core #45)
 
-예약을 **만든 날**(서울 날짜, 양 끝 포함) 기준으로 WEB/AGENT를 따로 세요. 노쇼·취소된 예약도 만든 건수에 들어가요. `from`·`to`를 빼면 처음부터·지금까지 전부예요. 숫자만 나오고 누가·어느 방인지는 안 나와요.
+예약을 **만든 날**(서울 날짜, 양 끝 포함) 기준으로 WEB/AGENT를 따로 세요. 노쇼·취소된 예약도 만든 건수에 들어가요. `from`·`to`를 빼면 처음부터·지금까지 전부이고, 응답의 `from`·`to`도 `null`이에요. 숫자만 나오고 누가·어느 방인지는 안 나와요.
 
 → `200`
 ```json
@@ -253,7 +253,7 @@
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
-| `INVALID_REQUEST` | 400 | 날짜 모양이 틀림(`YYYY-MM-DD` 아님), `from`이 `to`보다 늦음 |
+| `INVALID_REQUEST` | 400 | 날짜 모양이 틀림(`YYYY-MM-DD` 아님), `from`이 `to`보다 늦음, 연도가 2000–2100 밖 |
 | `UNAUTHORIZED` | 401 | 로그인 안 함 |
 | `ADMIN_ONLY` | 403 | 관리자(`users.role = ADMIN`)가 아님 |
 
@@ -370,3 +370,5 @@
 | 비서 API | 도구(MCP) 쪽 #26·#29, 에이전트 쪽 #31은 develop에 머지됨. #30·#33·#34·#40·#41은 리뷰 중 | 모두 머지되면 0장 상태 ✅로 |
 | `created_via` | core PR #45: `X-Client: agent`면 AGENT로 저장 | #45 머지 뒤 비서(MCP)가 core 호출에 `X-Client: agent`를 붙이기(영준) |
 | 연장 `POST /api/reservations/{id}/continue` | 요구사항 FR-RSV-105에만 있음. 11/3 넣기로 확정, 1회 초과 오류 `RESERVATION_EXTENSION_LIMIT` | core 구현(지영), 되면 비서 `continue_reservation` 도구 추가(영준) |
+| 자리 비움 `AWAY_RELEASED` (v0.2) | 요구사항 FR-DEV-103(11/3 회의 결정)에만 있음 | core에 상태 추가, 10·15분 판단 스케줄러, 30일 3번 = 노쇼 1번 계산(지영·수연) |
+| 재실 센서 이벤트 API | 명세 없음. 장치는 있음↔없음이 바뀔 때만 eventId를 붙여 보냄(FR-DEV-101) | 경로·형식·장치 토큰 정하기, 예: `POST /api/sensor-events`(지영·수연) |
