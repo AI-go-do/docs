@@ -17,10 +17,11 @@
 | 화면 · 비서 | `GET /api/rooms/availability?date=` | 하루 30분 칸별 빈방 | FR-WEB-004 | ✅ develop |
 | 화면 · 비서 | `GET /api/members?studentId=` | 참여자 학번 검색 | FR-RSV-004 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations` | 예약 만들기 | FR-RSV-001~005 | ✅ develop |
-| 화면 · 비서 | `POST /api/reservations/instant` | 지금 바로 쓰기 (누른 시각부터) | FR-RSV-103 | PR 대기 (core #42) |
+| 화면 · 비서 | `POST /api/reservations/instant` | 지금 바로 쓰기 (누른 시각부터) | FR-RSV-103 | ✅ develop |
 | 화면 · 비서 | `GET /api/reservations/me` | 내 예약 | FR-RSV-006 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/cancel` | 시작 전 취소 | FR-RSV-007 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/checkout` | 퇴실 | FR-RSV-008 | ✅ develop |
+| 화면 · 비서 | `POST /api/reservations/{id}/continue` | 연장하기 (사용 중 이어 쓰기, 1회) | FR-RSV-105 | PR 대기 (core #51) |
 | 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ❌ 아직 없음 |
 | 화면 | `POST /api/agent/chat` | 비서와 대화 | FR-AGT | 브랜치 (assistant) |
@@ -184,7 +185,7 @@
 
 만들기 직전에 지난 예약 정리(노쇼·자동 퇴실)를 한 번 돌려요. 그래서 입실 마감이 지난 예약 때문에 `409`가 나지 않아요.
 
-### `POST /api/reservations/instant` 지금 바로 쓰기 — PR 대기 (core #42)
+### `POST /api/reservations/instant` 지금 바로 쓰기
 
 시작은 서버가 정해요(누른 시각, 초 아래 버림). 끝만 보내요. `Idempotency-Key`도 똑같이 받아요(같은 키로 다시 보내면 시작 시각이 달라도 처음 예약을 `200`).
 
@@ -234,6 +235,32 @@
 | `RESERVATION_NOT_FOUND` | 404 | 없거나 내 예약이 아님 |
 | `NOT_RESERVATION_OWNER` | 403 | 참여자가 퇴실하려 함 |
 | `RESERVATION_NOT_IN_USE` | 409 | 입실 전이거나 이미 끝남 |
+
+### `POST /api/reservations/{id}/continue` 연장하기 — PR 대기 (core #51)
+
+사용 중 카드의 "연장하기"(FR-RSV-105). 대표자만, 사용 중(`IN_USE`)이고 **종료 10분 전–종료 전**에만 돼요. 지금 예약을 퇴실하고, 누른 시각부터 `endAt`까지 새 예약을 **바로 사용 중**으로 만들어요(키패드·노쇼 없음). 둘은 한 번에 처리돼서, 새 예약이 실패하면 지금 예약은 그대로예요. `Idempotency-Key`, `X-Created-Via`도 예약 만들기와 똑같이 받아요.
+
+```json
+{ "endAt": "2026-11-03T16:00:00+09:00" }
+```
+→ `201` (`Location: /api/reservations/13`), 같은 키 재요청이면 `200`. 응답 모양은 `POST /api/reservations`와 같고 `status`는 `IN_USE`, `startAt`은 누른 시각, `accessCode`는 **새 번호**예요. 예전 번호는 바로 무효예요. 새 번호는 나갔다가 다시 들어올 때만 써요.
+
+- `endAt`은 지금 종료 + 30분 단위, 최대 2시간이에요. 15:00에 끝나는 예약이면 15:30·16:00·16:30·17:00 중 하나예요.
+- **1회만** 돼요. 연장으로 만든 예약은 다시 연장할 수 없어요. 연장까지 쓴 뒤 30분 안에 시작하는 새 예약(`POST /api/reservations`, `/instant`)도 같은 `409 RESERVATION_EXTENSION_LIMIT`이에요.
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | `endAt` 빠짐, 키가 비었거나 64자 넘음 |
+| `RESERVATION_INVALID_LENGTH` | 400 | 끝이 지금 종료 + 30분 단위가 아니거나 2시간 넘음 |
+| `RESERVATION_NOT_FOUND` | 404 | 없거나 내 예약이 아님 |
+| `NOT_RESERVATION_OWNER` | 403 | 참여자가 연장하려 함 |
+| `RESERVATION_NOT_IN_USE` | 409 | 입실 전이거나 이미 끝남 |
+| `RESERVATION_EXTENSION_NOT_OPEN` | 409 | 종료 10분 전보다 이르거나 종료 시각이 지남 |
+| `RESERVATION_EXTENSION_LIMIT` | 409 | 연장 1회를 이미 씀 |
+| `RESERVATION_TIME_TAKEN` | 409 | 다음 칸을 다른 팀이 잡음. 지금 예약은 그대로 |
+| `PARTICIPANT_TIME_TAKEN` | 409 | 참여자가 다음 칸에 다른 방 예약이 있음 |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | 같은 키를 다른 예약·다른 끝 시각에 씀 |
+| `RESERVATION_BUSY` | 503 | 동시 요청이 몰림 (드묾) |
 
 ## 6. 출입 (키패드)
 
@@ -346,6 +373,6 @@
 | 로그인 API | core PR #37 리뷰 중 | 머지되면 0장 상태 ✅로 |
 | 비서 API | 도구(MCP) 쪽 #26·#29, 에이전트 쪽 #31은 develop에 머지됨. #30·#33·#34·#40·#41은 리뷰 중 | 모두 머지되면 0장 상태 ✅로 |
 | `created_via` | core가 모든 예약을 `WEB`으로 저장. 비서 예약을 구분할 방법 없음 | core에 `AGENT` 지정 방법 추가 요청(지영) |
-| 연장 `POST /api/reservations/{id}/continue` | 요구사항 FR-RSV-105(docs PR #17)에만 있음 | core 구현 가능 여부 확인(지영), 되면 비서 `continue_reservation` 도구 추가 |
+| 연장 `POST /api/reservations/{id}/continue` | core PR #51 리뷰 중 (#45 다음 머지) | 머지되면 0장 상태 ✅로, 비서 `continue_reservation` 도구 추가(영준) |
 | 자리 비움 `AWAY_RELEASED` (v0.2) | 요구사항 FR-DEV-103(11/3 회의 결정)에만 있음 | core에 상태 추가, 10·15분 판단 스케줄러, 30일 3번 = 노쇼 1번 계산(지영·수연) |
 | 재실 센서 이벤트 API | 명세 없음. 장치는 있음↔없음이 바뀔 때만 eventId를 붙여 보냄(FR-DEV-101) | 경로·형식·장치 토큰 정하기, 예: `POST /api/sensor-events`(지영·수연) |
