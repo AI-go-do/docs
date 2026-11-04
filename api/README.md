@@ -22,6 +22,7 @@
 | 화면 · 비서 | `POST /api/reservations/{id}/cancel` | 시작 전 취소 | FR-RSV-007 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/checkout` | 퇴실 | FR-RSV-008 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/continue` | 연장하기 (사용 중 이어 쓰기, 1회) | FR-RSV-105 | PR 대기 (core #51) |
+| 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | PR 대기 (core #52) |
 | 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ❌ 아직 없음 |
 | 화면 | `POST /api/agent/chat` | 비서와 대화 | FR-AGT | 브랜치 (assistant) |
@@ -262,6 +263,29 @@
 | `IDEMPOTENCY_KEY_REUSED` | 409 | 같은 키를 다른 예약·다른 끝 시각에 씀 |
 | `RESERVATION_BUSY` | 503 | 동시 요청이 몰림 (드묾) |
 
+### `POST /api/reports` 신고 — PR 대기 (core #52)
+
+"방에 문제가 있나요?" 버튼 뒤의 신고(FR-RPT-101). 지금 **사용 중(`IN_USE`)인 예약의 대표자나 참여자**만 보낼 수 있고, 그 방이거나 **옆 방**일 때만 돼요. 옆 방은 번호가 이웃한 방(1–2, 2–3, 3–4, 4–5, 요구사항 Q-05)이에요.
+
+```json
+{ "roomId": 2, "category": "NOISE", "content": "벽 너머로 계속 소리 질러요", "noiseConfirmed": true }
+```
+→ `201`
+```json
+{ "id": 7, "roomId": 2, "category": "NOISE", "verdict": "OPEN", "createdAt": "2026-11-12T14:20:05+09:00" }
+```
+
+- `category`: `BROKEN`(비품 고장) · `WINDOW_OPEN`(창문 열림) · `MESSY`(어질러짐) · `NOISE`(소음)
+- `noiseConfirmed`: "정말 소란인가요?" 체크. 소음일 때만 필수
+- `content`: 메모, 선택, 500자까지
+- `verdict`는 관리자 판정(FR-RPT-103) 전까지 `OPEN`이에요. 사진·결과 알림·판정 API는 아직 없어요
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | `roomId`·`category` 빠짐, 없는 종류, 메모 500자 넘음 |
+| `REPORT_NOISE_NOT_CONFIRMED` | 400 | 소음인데 `noiseConfirmed`가 `true`가 아님 |
+| `REPORT_NOT_ALLOWED` | 403 | 지금 그 방이나 옆 방을 사용 중인 예약자가 아님 (입실 전·퇴실 후 포함) |
+
 ## 6. 출입 (키패드)
 
 ### `POST /api/access/verify` — 장치 토큰 필요
@@ -374,5 +398,6 @@
 | 비서 API | 도구(MCP) 쪽 #26·#29, 에이전트 쪽 #31은 develop에 머지됨. #30·#33·#34·#40·#41은 리뷰 중 | 모두 머지되면 0장 상태 ✅로 |
 | `created_via` | core가 모든 예약을 `WEB`으로 저장. 비서 예약을 구분할 방법 없음 | core에 `AGENT` 지정 방법 추가 요청(지영) |
 | 연장 `POST /api/reservations/{id}/continue` | core PR #51 리뷰 중 (#45 다음 머지) | 머지되면 0장 상태 ✅로, 비서 `continue_reservation` 도구 추가(영준) |
+| 신고 `POST /api/reports` | core PR #52 리뷰 중 (#51 다음 머지). 사진·결과 알림·관리자 판정(FR-RPT-103) 없음 | 머지되면 0장 상태 ✅로. 판정 API·화면은 다음 PR(지영) |
 | 자리 비움 `AWAY_RELEASED` (v0.2) | 요구사항 FR-DEV-103(11/3 회의 결정)에만 있음 | core에 상태 추가, 10·15분 판단 스케줄러, 30일 3번 = 노쇼 1번 계산(지영·수연) |
 | 재실 센서 이벤트 API | 명세 없음. 장치는 있음↔없음이 바뀔 때만 eventId를 붙여 보냄(FR-DEV-101) | 경로·형식·장치 토큰 정하기, 예: `POST /api/sensor-events`(지영·수연) |
