@@ -1,6 +1,6 @@
 # MVP (v0.1) 서비스별 구조 · API
 
-> 2026-11-04 기준 코드: core `develop` d9724f7 (Flyway V1~V5), device `main` 3d4d6b5, infra `main`, web `develop` 2ef77db + 화면 PR 사슬(#4~#10).
+> 2026-11-04 기준 코드: core `develop` d9724f7 (Flyway V1~V5), device `main` 3d4d6b5, infra `main` 8aec2a8, web `develop` 2ef77db + 화면 PR 사슬(#4~#10), assistant `develop` b3de9b7.
 > 요청·응답 본문과 오류 코드 전체는 [API 명세](../api/README.md)에 있어요. 여기서는 **서비스마다 무엇을 열고(제공) 무엇을 부르는지(호출)** 만 봐요.
 > 표의 상태: ✅ develop/main에 있음 · 🔶 PR·브랜치에만 있음 · ❌ 코드 없음.
 
@@ -13,7 +13,7 @@
 | 서비스 | 저장소 | 실행 위치 | 여는 곳 |
 |---|---|---|---|
 | 학교 nginx | (학교 서버, 강사님 관리) | 학교 서버, Docker 밖 | 443 → 8411·8412 |
-| 우리 입구 nginx `gateway` | `infra` | compose 컨테이너 | `${PORT}:80` (밖으로 열린 유일한 포트) |
+| 우리 입구 nginx `gateway` | `infra` | compose 컨테이너 | `127.0.0.1:${PORT}:80` (서버 안에서만 열린 유일한 포트, infra #8) |
 | web | `mspace-web` | compose 컨테이너 (nginx가 정적 파일) | 안쪽 `web:80` |
 | core | `mspace-core` | compose 컨테이너 | 안쪽 `core:8080` |
 | PostgreSQL | `infra` | compose 컨테이너 | 안쪽 `db:5432`, 밖으로 안 염 |
@@ -57,6 +57,7 @@ flowchart LR
 
 - **제공 API: 없음.** 토큰도 검사하지 않아요. 인증은 core가 해요.
 - Docker 내부 DNS(`127.0.0.11`)에 10초마다 다시 물어서, 배포로 컨테이너가 바뀌어도 502가 안 나요.
+- 설정 파일은 켤 때만 읽어요. 배포 워크플로가 `nginx -t` → `nginx -s reload`로 다시 읽게 해요(core #49 · web #11 · assistant #48).
 
 ## 3. web (PWA)
 
@@ -64,6 +65,7 @@ flowchart LR
 
 - **제공 API: 없음.** 정적 파일(HTML·JS)만 내요. 같은 주소라 CORS가 필요 없어요.
 - 액세스 토큰은 메모리에만 들고, `Authorization: Bearer`로 보내요.
+- web 컨테이너는 파일만 내려줘요. API는 브라우저가 입구 nginx의 `/api/`를 거쳐 core에 바로 불러요. core가 web을 부르는 일은 없어요.
 
 | 화면 | 부르는 core API | 화면 상태 |
 |---|---|---|
@@ -157,16 +159,20 @@ flowchart LR
 - 중계 설정: `SERVER`, `DEVICE_TOKEN`, `PORT`(시리얼, 비면 자동 찾기), `DRY_RUN=1`(서버 없이 `123456`만 통과).
 - 배포는 노트북에서 `git pull` 후 다시 실행이에요. 이미지(GHCR)를 만들지 않아요.
 
-## 7. MVP 마감 전에 맞춰야 할 곳
+## 7. MVP 마감 전에 맞춰야 할 곳 (11-04 점검)
 
 | 무엇 | 지금 | 할 일 | 저장소 |
 |---|---|---|---|
-| compose → core 환경값 | infra `main`의 compose가 `MSPACE_DEVICE_TOKEN`·`JWT_SECRET`·`MAIL_*`를 core에 안 넘김. 이대로 서버에 올리면 키패드가 전부 `401`, 메일이 안 감 | infra 브랜치 `chore/device-token`·`chore/app-env` 머지 | infra |
+| compose → core 환경값 | ✅ infra #6 · #7 머지로 `MSPACE_DEVICE_TOKEN` · `JWT_SECRET` · `MAIL_*`를 core에 넘김. 장치 토큰이 비면 compose가 안 켜짐 | 서버 `.env.dev` · `.env.prod`에 값 넣기 | infra |
+| 입구 포트 뒷문 | 🔶 infra #8: `0.0.0.0` → `127.0.0.1`로 묶고 설정 폴더 연결 | CodeRabbit 리뷰 후 머지 | infra |
+| nginx 설정 반영 | 🔶 core #49 · web #11 · assistant #48: 배포 때 `nginx -s reload` | infra #8 다음에 머지 | core · web · assistant |
+| 인증 메일 | `MAIL_ENABLED` 기본 `false` (번호를 로그에만 찍음) | 서버 `.env`에 `MAIL_ENABLED=true`, Gmail 앱 비밀번호. 학교 서버에서 `nc -vz smtp.gmail.com 587` 확인 | infra |
 | 중계 `SERVER` 기본값 | `http://localhost:8080` (core를 맥에서 따로 켤 때만 맞음). compose는 core 포트를 밖으로 안 열어요 | 서버 쓸 때 `SERVER=https://dev-mspace.java21.net`, 맥 compose면 `http://localhost:8411` | device |
 | 화면 | 로그인~배치도가 web PR #4~#10에 있음 | 순서대로 머지 | web |
-| refresh 토큰 쿠키 | core `feat/refresh-cookie` · web #4가 짝. 둘 다 미머지 | core 먼저, 그다음 web #4 | core · web |
+| refresh 토큰 쿠키 | core #48 · web #4가 짝. 둘 다 미머지 | core 먼저, 그다음 web #4 | core · web |
+| 키패드 잠금 횟수 | 틀린 횟수가 줄지 않음 | 시연 전 `UPDATE keypad_lock SET failed_count=0, locked_until=NULL;` | core |
 | `GET /api/rules` | 요구사항에만 있음. 화면은 자체 문구로 대신 | MVP는 화면 문구로 가고, core API는 다음 버전 | core |
-| 학교 서버 배포 | 강사님 안내 대기 | 그 전까지 맥 compose로 시험 | infra |
+| 학교 서버 배포 | 강사님 안내 대기 (`DEPLOY_ENABLED` 꺼짐) | 그 전까지 맥 compose로 시험 | infra |
 
 ## 8. (참고, v0.3) AI 비서 · `mspace-assistant`
 
@@ -176,7 +182,7 @@ MVP에는 안 들어가지만, 서버별 구조를 한 번에 보려고 같이 �
 
 | 서비스 | 여는 것 | 부르는 것 | 상태 |
 |---|---|---|---|
-| agent `:8091` | 비서 채팅 API (ChatController) | `LlmClient` → Gemini API, MCP 서버 `POST /mcp` | 🔶 채팅 API는 브랜치에만 · ✅ Gemini 어댑터 |
+| agent `:8091` | 비서 채팅 API, 확인 `POST /api/agent/confirmations/{token}` (MCP 서버 확인 API로 그대로 넘김) | `LlmClient` → Gemini API, MCP 서버 `POST /mcp` | 🔶 채팅 · 확인 API는 브랜치(#33) · 🔶 Ollama 어댑터 브랜치(#34) · ✅ Gemini 어댑터 |
 | mcp-server `:8090` | MCP 도구 5개 (`find_available_rooms`, `my_reservations`, `create_reservation`, `cancel_reservation`, `checkout_reservation`), `POST /api/confirmations/{token}` | core `GET /api/rooms/availability`, `GET /api/reservations/me`, `POST /api/reservations`, `POST /api/reservations/{id}/cancel`·`checkout` | ✅ |
 
 - 쓰기 도구는 바로 실행하지 않고 확인안(2분 유효)을 만든 뒤, 확인 API로 한 번만 실행해요.
