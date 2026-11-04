@@ -12,8 +12,8 @@
 
 | 서비스 | 저장소 | 실행 위치 | 여는 곳 |
 |---|---|---|---|
-| 학교 nginx | (학교 서버, 강사님 관리) | 학교 서버, Docker 밖 | 443 → 8411·8412 |
-| 우리 입구 nginx `gateway` | `infra` | compose 컨테이너 | `127.0.0.1:${PORT}:80` (서버 안에서만 열린 유일한 포트, infra #8) |
+| nginx | (학교 서버, 강사님 관리) | 학교 서버, Docker 밖 (Nginx Proxy Manager) | 443 → 8411·8412 |
+| API 게이트웨이 `gateway` | `mspace-gateway` (compose는 `infra`) | compose 컨테이너 | `127.0.0.1:${PORT}:8000` (서버 안에서만 열린 유일한 포트, infra #8 · #9) |
 | web | `mspace-web` | compose 컨테이너 (nginx가 정적 파일) | 안쪽 `web:80` |
 | core | `mspace-core` | compose 컨테이너 | 안쪽 `core:8080` |
 | PostgreSQL | `infra` | compose 컨테이너 | 안쪽 `db:5432`, 밖으로 안 염 |
@@ -21,9 +21,9 @@
 
 서버마다 안쪽 구조는 3장(프론트) · 4장(백엔드) · 6장(디바이스) · 8장(AI 비서, v0.3) 그림에 있어요.
 
-**MVP에서 빠지는 것**: agent · MCP 서버 · 모델(Gemini/Ollama) · 재실 센서 · Jetson. compose에 `mcp`·`agent` 컨테이너가 떠 있어도 입구 nginx에 `/api/agent/` 길이 없어서 v0.1에는 닿지 않아요.
+**MVP에서 빠지는 것**: agent · MCP 서버 · 모델(Gemini/Ollama) · 재실 센서 · Jetson. 게이트웨이에 `/api/agent/` 길은 먼저 들어와 있지만, agent 채팅 API가 아직 없어서 v0.1에는 쓰지 않아요. MCP는 내부 전용이라 밖에서 닿지 않아요.
 
-## 1. 학교 nginx
+## 1. nginx (학교 서버)
 
 ```mermaid
 flowchart LR
@@ -36,28 +36,31 @@ flowchart LR
 | `https://mspace.java21.net` | 학교 서버 `:8412` | 시연용. HTTPS를 여기서 풀어요 |
 | `https://dev-mspace.java21.net` | 학교 서버 `:8411` | 개발용 |
 
-- **제공 API: 없음.** 길만 넘겨요. 설정은 강사님이 학교 nginx 관리자에서 해요.
+- **제공 API: 없음.** 길만 넘겨요. 설정은 학교 Nginx Proxy Manager에서 해요.
 
-## 2. 우리 입구 nginx (`gateway`)
+## 2. API 게이트웨이 (`gateway`)
 
 ```mermaid
 flowchart LR
-    in[":80"] --> r1{"주소"}
-    r1 -- "/api/" --> core["core:8080"]
-    r1 -- "= /actuator/health" --> core
-    r1 -- "/ (나머지)" --> web["web:80"]
+    in[":8000"] --> jwt{"토큰 확인<br/>(공개 API는 통과)"}
+    jwt -- "/api/agent/**" --> agent["agent:8091"]
+    jwt -- "/api/** · /actuator/health" --> core["core:8080"]
+    jwt -- "/ (나머지)" --> web["web:80"]
 ```
 
-| 경로 | 보내는 곳 | 비고 | 상태 |
+| 경로 | 보내는 곳 | 토큰 | 상태 |
 |---|---|---|---|
-| `/api/` | `core:8080` | Host·X-Real-IP·X-Forwarded-* 헤더 붙임 | ✅ |
-| `= /actuator/health` | `core:8080` | 배포 직후 살아 있는지 확인 | ✅ |
-| `/` | `web:80` | 화면. 새로고침 시 화면 주소(`/me` 등)는 web 안 nginx가 처리 | ✅ |
-| `/api/agent/` | agent | v0.3 (비서). MVP 아님 | ❌ |
+| `/api/agent/**` | `agent:8091` | 필요 | 게이트웨이 PR에 있음 (비서 채팅은 v0.3) |
+| `/api/**` | `core:8080` | 필요 (공개 API 빼고) | 게이트웨이 PR에 있음 |
+| `/actuator/health` | `core:8080` | 필요 없음 | 배포 직후 core가 살아 있는지 확인 |
+| `/` (나머지) | `web:80` | 필요 없음 | 화면. 새로고침 시 화면 주소(`/me` 등)는 web 안 nginx가 처리 |
 
-- **제공 API: 없음.** 토큰도 검사하지 않아요. 인증은 core가 해요.
-- Docker 내부 DNS(`127.0.0.11`)에 10초마다 다시 물어서, 배포로 컨테이너가 바뀌어도 502가 안 나요.
-- 설정 파일은 켤 때만 읽어요. 배포 워크플로가 `nginx -t` → `nginx -s reload`로 다시 읽게 해요(core #49 · web #11 · assistant #48).
+- **제공 API: 없음.** 길을 나누고 토큰을 먼저 확인해요. core도 한 번 더 확인해요.
+- 공개 API: `POST /api/auth/email-codes` · `login` · `refresh` · `logout`, `POST /api/access/verify`, `GET /api/rooms` · `/api/rooms/availability`.
+- 토큰은 core와 같은 `JWT_SECRET`(HS256, 발급자 `mspace-core`)으로 확인해요.
+- `lb://` 이름으로 보내서 인스턴스가 여러 개면 돌아가며 보내요(로드밸런싱).
+- 게이트웨이 자기 상태는 안쪽 포트 8001에만 있고 밖에 안 열어요.
+- 상태(11-04): [mspace-gateway #1](https://github.com/AI-go-do/mspace-gateway/pull/1) · [infra #9](https://github.com/AI-go-do/infra/pull/9) 머지 대기. 머지 전 서버 입구는 nginx 컨테이너(`/api/` → core, `/` → web)예요.
 
 ## 3. web (PWA)
 
@@ -65,7 +68,7 @@ flowchart LR
 
 - **제공 API: 없음.** 정적 파일(HTML·JS)만 내요. 같은 주소라 CORS가 필요 없어요.
 - 액세스 토큰은 메모리에만 들고, `Authorization: Bearer`로 보내요.
-- web 컨테이너는 파일만 내려줘요. API는 브라우저가 입구 nginx의 `/api/`를 거쳐 core에 바로 불러요. core가 web을 부르는 일은 없어요.
+- web 컨테이너는 파일만 내려줘요. API는 브라우저가 게이트웨이의 `/api/`를 거쳐 core에 바로 불러요. core가 web을 부르는 일은 없어요.
 
 | 화면 | 부르는 core API | 화면 상태 |
 |---|---|---|
