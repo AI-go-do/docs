@@ -257,6 +257,27 @@
 | `RESERVATION_NOT_IN_USE` | 409 | 사용 중이 아님 |
 | `STILL_HERE_ALREADY_USED` | 409 | 이 예약에서 이미 씀 |
 
+### `POST /api/reservations/{id}/photos` 입실·퇴실 사진 올리기 — core 구현 중
+
+`multipart/form-data`로 `kind`(`CHECK_IN` 또는 `CHECK_OUT`)와 `file`(사진 1장)을 보내요 → `201 {"reservationId": 12, "kind": "CHECK_IN", "uploadedAt": "...+09:00", "sizeBytes": 812345}`. 선택 기능이라 안 올려도 입실·퇴실은 그대로 돼요(FR-RPT-102).
+
+- 그 예약의 대표자·참여자 누구나. 종류별 1장(먼저 올린 사진)
+- 입실 사진: 사용 중(`IN_USE`)일 때. 퇴실 사진: 사용 중이거나 퇴실한 뒤 30분 안
+- JPEG·PNG만, 최대 2MB. 화면에서 줄여서 보내 주세요(nginx 본문 크기 제한도 2MB보다 커야 해요)
+- 올린 지 30일 지나면 지워져요
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `RESERVATION_NOT_FOUND` | 404 | 없거나 내가 들어간 예약이 아님 |
+| `PHOTO_INVALID` | 400 | `kind`가 틀리거나, 파일이 없거나 JPEG·PNG가 아님 |
+| `PHOTO_TOO_LARGE` | 400 | 2MB 넘음 |
+| `PHOTO_NOT_ALLOWED_NOW` | 409 | 입실 사진인데 사용 중이 아님, 퇴실 사진인데 사용 전이거나 퇴실 30분 지남 |
+| `PHOTO_ALREADY_UPLOADED` | 409 | 그 종류 사진이 이미 있음 |
+
+### `GET /api/reservations/{id}/photos/{kind}` 사진 보기 — core 구현 중
+
+사진 파일 그대로(`image/jpeg`·`image/png`). 그 예약의 대표자·참여자와 관리자만. 없거나 볼 수 없으면 `404 PHOTO_NOT_FOUND`. 신고 판정 화면(FR-WEB-101)은 "앞 예약의 `CHECK_OUT`"과 "신고자 예약의 `CHECK_IN`"을 이 주소로 불러요.
+
 ### `POST /api/reservations/{id}/continue` 연장하기 — 아직 없음 (core 구현 예정)
 
 형식은 [요구사항 FR-RSV-105](../requirements/requirements.md#72-기능-요구사항-목록) 그대로 만들어요. 1회를 넘기면 `409 RESERVATION_EXTENSION_LIMIT`(11/3 지영 확정). 구현되면 이 절을 채워요.
