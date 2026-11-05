@@ -15,6 +15,7 @@
 | nginx | `GET /api/auth/check` | 비서로 넘기기 전 토큰 확인 | FR-AUTH-002 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms` | 방 목록 | FR-ROOM-001 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms/availability?date=` | 하루 30분 칸별 빈방 | FR-WEB-004 | ✅ develop |
+| 화면 · 비서 | `GET /api/rooms/status` | 방 현황 (지금 비었는지, 다음 예약, 센서 재실) | FR-DEV-102 | PR 대기 (core #62) |
 | 화면 · 비서 | `GET /api/members?studentId=` | 참여자 학번 검색 | FR-RSV-004 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations` | 예약 만들기 | FR-RSV-001~005 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/instant` | 지금 바로 쓰기 (누른 시각부터) | FR-RSV-103 | ✅ develop |
@@ -22,6 +23,7 @@
 | 화면 · 비서 | `POST /api/reservations/{id}/cancel` | 시작 전 취소 | FR-RSV-007 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/checkout` | 퇴실 | FR-RSV-008 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/continue` | 연장하기 (사용 중 이어 쓰기, 1회) | FR-RSV-105 | PR 대기 (core #51) |
+| 화면 | `POST /api/reservations/{id}/still-here` | 아직 있어요 (자리 비움 타이머 다시, 예약당 1번) | FR-DEV-103 | PR 대기 (core #63) |
 | 관리자 | `GET /api/reservations/stats` | WEB/AGENT 예약 건수 | NFR-COM-008 | PR 대기 (core #45) |
 | 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | PR 대기 (core #52) |
 | 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
@@ -242,6 +244,18 @@
 | `RESERVATION_NOT_FOUND` | 404 | 없거나 내 예약이 아님 |
 | `NOT_RESERVATION_OWNER` | 403 | 참여자가 퇴실하려 함 |
 | `RESERVATION_NOT_IN_USE` | 409 | 입실 전이거나 이미 끝남 |
+
+### `POST /api/reservations/{id}/still-here` 아직 있어요
+
+본문 없음 → `200 {"id": 12, "status": "IN_USE"}`. 대표자, 사용 중, **예약당 1번**. 누르면 자리 비움 시계를 누른 시각부터 다시 재고, 누른 뒤에는 **10분 비면 알림 없이 바로 퇴실**해요(FR-DEV-103, 11/5 지영). 화면은 `AWAY_SOON` 알림에만 이 버튼을 붙여요.
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `STILL_HERE_DISABLED` | 404 | 서버 설정으로 꺼 둠 (기본은 켜짐) |
+| `RESERVATION_NOT_FOUND` | 404 | 없거나 내 예약이 아님 |
+| `NOT_RESERVATION_OWNER` | 403 | 참여자가 누름 |
+| `RESERVATION_NOT_IN_USE` | 409 | 사용 중이 아님 |
+| `STILL_HERE_ALREADY_USED` | 409 | 이 예약에서 이미 씀 |
 
 ### `POST /api/reservations/{id}/continue` 연장하기 — 아직 없음 (core 구현 예정)
 
