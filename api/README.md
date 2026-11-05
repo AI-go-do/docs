@@ -25,7 +25,7 @@
 | 관리자 | `GET /api/reservations/stats` | WEB/AGENT 예약 건수 | NFR-COM-008 | PR 대기 (core #45) |
 | 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | PR 대기 (core #52) |
 | 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
-| 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | ❌ 아직 없음 (형식은 지영·수연 확정) |
+| 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | PR 대기 (core #60) |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ❌ 아직 없음 |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT | 브랜치 (assistant) |
 | 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT | 브랜치 (assistant) |
@@ -314,9 +314,9 @@
 | `DEVICE_UNAUTHORIZED` | 401 | 장치 토큰이 없거나 틀림 |
 | `INVALID_REQUEST` | 400 | `eventId`·`roomId` 빠짐, 길이 넘음 |
 
-## 6-1. 재실 · CO2 센서
+## 6-2. 재실 · CO2 센서
 
-### `POST /api/sensor-events` — 장치 토큰 필요, ❌ core 구현 전
+### `POST /api/sensor-events` — 장치 토큰 필요, core #60 리뷰 중
 
 방마다 붙은 장치(ESP32, 시험용은 젯슨+우노)가 "지금 어떤지"만 알려요. 10·15분 자리 비움(FR-DEV-103), 환기 알림(FR-DEV-104), 방 현황(FR-DEV-102) 판단은 모두 core가 해요. 형식은 11/5 지영·수연이 맞췄어요. 장치 쪽 자세한 설명은 mspace-device `docs/sensor-events-api.md`.
 
@@ -357,7 +357,7 @@ CO2:
 
 | 오류 | 상태 | 언제 | 장치 동작 |
 |---|---|---|---|
-| `INVALID_REQUEST` | 400 | 빠진 값, 모르는 `kind`, `ppm` 범위 밖, 오프셋 없는 시각, 5분 넘게 미래인 시각 | 그 이벤트만 버려요 |
+| `INVALID_REQUEST` | 400 | 빠진 값, 없는 방 번호(`roomId`), 모르는 `kind`, `ppm` 범위 밖, 오프셋 없는 시각, 5분 넘게 미래인 시각 | 그 이벤트만 버려요 |
 | `DEVICE_UNAUTHORIZED` | 401 | 장치 토큰 없음·틀림 | 이벤트를 모아 둔 채 간격을 늘려 다시 보내요(설정 문제라 고치면 이어서 보냄) |
 | `5xx`, 연결 실패 | - | 서버 문제 | 같은 `eventId`로 다시 보내요 (1→2→4…30초) |
 
@@ -476,4 +476,4 @@ CO2:
 | 신고 `POST /api/reports` | core PR #52 리뷰 중 (#51 다음 머지). 사진·결과 알림·관리자 판정(FR-RPT-103) 없음 | 머지되면 0장 상태 ✅로. 판정 API·화면은 다음 PR(지영) |
 | 자리 비움 `AWAY_RELEASED` (v0.2) | 요구사항 FR-DEV-103(11/3 회의 결정)에만 있음 | core에 상태 추가, 10·15분 판단 스케줄러, 30일 3번 = 노쇼 1번 계산(지영·수연) |
 | 노쇼 벌칙 `USER_SUSPENDED`·`PARTICIPANT_SUSPENDED` | core 브랜치 `feat/rsv-no-show-penalty`(V9 `user_suspension`), PR 대기 | 머지되면 이 줄 지우기 |
-| 재실 센서 `POST /api/sensor-events` | 형식은 6-1장(11/5 지영·수연 확정). core에 아직 없음. 장치 코드는 mspace-device #24 (지금은 보내지 않고 화면에만 출력) | core에 추가(지영), 센서용 장치 토큰(지영·재웅), API 게이트웨이 공개 경로(재웅) |
+| 재실 센서 `POST /api/sensor-events` | 형식은 6-2장(11/5 지영·수연 확정). core #60 리뷰 중. 장치 코드는 mspace-device #24 (지금은 보내지 않고 화면에만 출력) | core #60 머지(지영), 센서용 장치 토큰(지영·재웅), API 게이트웨이 공개 경로(재웅) |
