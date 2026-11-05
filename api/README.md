@@ -25,6 +25,7 @@
 | 관리자 | `GET /api/reservations/stats` | WEB/AGENT 예약 건수 | NFR-COM-008 | PR 대기 (core #45) |
 | 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | PR 대기 (core #52) |
 | 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
+| 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | ❌ 아직 없음 (형식은 지영·수연 확정) |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ❌ 아직 없음 |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT | 브랜치 (assistant) |
 | 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT | 브랜치 (assistant) |
@@ -40,7 +41,7 @@
 | 로그인 | `Authorization: Bearer <accessToken>`. 없거나 틀리면 `401 UNAUTHORIZED` |
 | 개발용 임시 헤더 | `X-User-Id: <회원 id>`. core를 `MSPACE_DEV_HEADER=true`로 띄웠을 때만 받아요. 운영에서는 꺼요. 토큰이 있으면 토큰만 봐요 |
 | 만든 곳 | 비서는 예약 만들기(`POST /api/reservations`, `/instant`)에 `X-Created-Via: AGENT`를 붙여요. 그러면 `created_via = AGENT`, 없으면 `WEB`. 대소문자와 앞뒤 공백은 무시해요(` agent `도 AGENT). `WEB`·`AGENT` 말고 다른 값이면 `400 INVALID_REQUEST`. 건수를 따로 세는 표시일 뿐 권한과는 상관없어요 (core #45) |
-| 장치 | 키패드는 사람 토큰이 아니라 장치 토큰(`Authorization: Bearer <장치 토큰>`)을 써요 |
+| 장치 | 키패드·센서는 사람 토큰이 아니라 장치 토큰(`Authorization: Bearer <장치 토큰>`)을 써요 |
 | 시각 | 서울 시간 ISO-8601 `+09:00` (예: `2026-11-03T14:00:00+09:00`). 토큰 만료 시각(`expiresAt`)만 UTC `Z`. 보낼 때 오프셋이 없으면(`2026-11-03T14:00`) `400 INVALID_REQUEST`, `Z`로 보내면 받고 응답은 `+09:00`으로 줘요 |
 | 예약 칸 | 정각·30분 단위, 1회 최대 2시간, 오늘부터 7일 안 |
 | 오류 본문 | 모두 `{"code": "RESERVATION_TIME_TAKEN", "message": "이미 예약된 시간입니다"}`. 화면은 `message`를 그대로 보여 줘도 돼요 |
@@ -313,6 +314,57 @@
 | `DEVICE_UNAUTHORIZED` | 401 | 장치 토큰이 없거나 틀림 |
 | `INVALID_REQUEST` | 400 | `eventId`·`roomId` 빠짐, 길이 넘음 |
 
+## 6-1. 재실 · CO2 센서
+
+### `POST /api/sensor-events` — 장치 토큰 필요, ❌ core 구현 전
+
+방마다 붙은 장치(ESP32, 시험용은 젯슨+우노)가 "지금 어떤지"만 알려요. 10·15분 자리 비움(FR-DEV-103), 환기 알림(FR-DEV-104), 방 현황(FR-DEV-102) 판단은 모두 core가 해요. 형식은 11/5 지영·수연이 맞췄어요. 장치 쪽 자세한 설명은 mspace-device `docs/sensor-events-api.md`.
+
+재실:
+```json
+{ "eventId": "2f1c6b9e-6d0a-4a77-9a52-0c1f3c1d8e41", "roomId": 2, "deviceId": "sensor-2",
+  "kind": "OCCUPANCY", "occupied": false, "sources": { "radar": false },
+  "observedAt": "2026-11-05T14:05:00+09:00" }
+```
+
+CO2:
+```json
+{ "eventId": "9a0e3f55-1b2c-4d6e-8f90-a1b2c3d4e5f6", "roomId": 2, "deviceId": "sensor-2",
+  "kind": "CO2", "ppm": 1080, "source": "scd40", "observedAt": "2026-11-05T14:06:00+09:00" }
+```
+
+| 필드 | 형식 | 뜻 |
+|---|---|---|
+| `eventId` | 글자 1~64자 (UUID) | 장치가 이벤트마다 새로 만들어요. 다시 보낼 때만 같은 값이라, 같은 값은 한 번만 저장해요 |
+| `roomId` · `deviceId` | 정수 · 글자 50자 이하 | 방 번호, 보낸 장치(`sensor-방번호`) |
+| `kind` | `OCCUPANCY` 또는 `CO2` | 재실 / CO2 |
+| `occupied` | 참/거짓 (재실) | 장치가 센서들을 합친 판단. 하나라도 "있음"이면 `true` (FR-DEV-103) |
+| `sources` | 객체, 선택 (재실) | 센서별 값(`pir`, `radar`, `light`). core는 판단에 안 쓰고 기록만 해요 (PIR·레이더 정확도 비교용) |
+| `ppm` · `source` | 정수 0~10000 · 글자, 선택 (CO2) | CO2 농도, 센서 이름 |
+| `observedAt` | 시각 `+09:00` | 센서가 본 시각. 10·15분 타이머와 CO2 3분 판단은 받은 시각이 아니라 이 시각으로 재요. 장치는 인터넷 시계(NTP)를 맞춘 뒤에만 보내요 |
+
+**언제 보내나**
+- 재실: 있음↔없음이 **바뀔 때 바로**, 바뀌지 않아도 **10초마다** 지금 상태를 다시 보내요(살아 있다는 신호). 같은 상태가 다시 오면 core는 "마지막 받은 시각"만 바꿔요.
+- 한 방에서 **1분 동안** 재실 이벤트가 안 오면 core는 그 방을 **"있음"**으로 봐요(끊김 때문에 자동 퇴실되지 않게, FR-DEV-101 "틀리면 있음 쪽으로").
+- CO2: 1분마다. **1000ppm 넘는 값이 3분 연속**이면 환기 알림(같은 방 30분에 한 번).
+
+→ 처리했으면 `200`.
+
+```json
+{ "result": "STORED" }
+{ "result": "DUPLICATE" }
+```
+
+| 오류 | 상태 | 언제 | 장치 동작 |
+|---|---|---|---|
+| `INVALID_REQUEST` | 400 | 빠진 값, 모르는 `kind`, `ppm` 범위 밖, 오프셋 없는 시각, 5분 넘게 미래인 시각 | 그 이벤트만 버려요 |
+| `DEVICE_UNAUTHORIZED` | 401 | 장치 토큰 없음·틀림 | 이벤트를 모아 둔 채 간격을 늘려 다시 보내요(설정 문제라 고치면 이어서 보냄) |
+| `5xx`, 연결 실패 | - | 서버 문제 | 같은 `eventId`로 다시 보내요 (1→2→4…30초) |
+
+정할 것:
+- 장치 토큰: 지금 core는 키패드와 같은 토큰 하나뿐이에요. 센서용 토큰을 장치마다 따로 두고 토큰에 방·장치를 묶을지(다르면 `403 DEVICE_ROOM_MISMATCH`) 정하기 (지영·재웅)
+- API 게이트웨이: 장치 토큰은 JWT가 아니라서 `/api/sensor-events`를 `/api/access/verify`처럼 공개 경로로 넣기 (재웅)
+
 ## 7. 비서 (`/api/agent`) — 로그인 필요, 아직 브랜치
 
 비서 서버는 받은 `Authorization`을 그대로 core에 넘겨요. 그래서 비서도 학생 본인 권한만큼만 할 수 있어요.
@@ -424,4 +476,4 @@
 | 신고 `POST /api/reports` | core PR #52 리뷰 중 (#51 다음 머지). 사진·결과 알림·관리자 판정(FR-RPT-103) 없음 | 머지되면 0장 상태 ✅로. 판정 API·화면은 다음 PR(지영) |
 | 자리 비움 `AWAY_RELEASED` (v0.2) | 요구사항 FR-DEV-103(11/3 회의 결정)에만 있음 | core에 상태 추가, 10·15분 판단 스케줄러, 30일 3번 = 노쇼 1번 계산(지영·수연) |
 | 노쇼 벌칙 `USER_SUSPENDED`·`PARTICIPANT_SUSPENDED` | core 브랜치 `feat/rsv-no-show-penalty`(V9 `user_suspension`), PR 대기 | 머지되면 이 줄 지우기 |
-| 재실 센서 이벤트 API | 명세 없음. 장치는 있음↔없음이 바뀔 때만 eventId를 붙여 보냄(FR-DEV-101) | 경로·형식·장치 토큰 정하기, 예: `POST /api/sensor-events`(지영·수연) |
+| 재실 센서 `POST /api/sensor-events` | 형식은 6-1장(11/5 지영·수연 확정). core에 아직 없음. 장치 코드는 mspace-device #24 (지금은 보내지 않고 화면에만 출력) | core에 추가(지영), 센서용 장치 토큰(지영·재웅), API 게이트웨이 공개 경로(재웅) |
