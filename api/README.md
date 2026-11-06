@@ -16,7 +16,11 @@
 | 화면 · 비서 | `GET /api/rooms` | 방 목록 | FR-ROOM-001 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms/availability?date=` | 하루 30분 칸별 빈방 | FR-WEB-004 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms/status` | 방 현황 (지금 비었는지, 다음 예약, 센서 재실) | FR-DEV-102 | PR 대기 (core #62) |
-| 화면 · 비서 | `GET /api/members?studentId=` | 참여자 학번 검색 | FR-RSV-004 | ✅ develop |
+| 화면 · 비서 | `GET /api/members?studentId=` | 학번 검색 (친구 요청 전에 이름 확인) | FR-RSV-004 | ✅ develop |
+| 화면 | `GET /api/friends` | 친구 창: 친구·받은 요청·보낸 요청 | FR-RSV-004 | PR 대기 (core #68) |
+| 화면 | `POST /api/friends/requests` | 학번으로 친구 요청 | FR-RSV-004 | PR 대기 (core #68) |
+| 화면 | `POST /api/friends/requests/{id}/accept`·`decline`·`cancel` | 수락·거절(받은 사람), 취소(보낸 사람) | FR-RSV-004 | PR 대기 (core #68) |
+| 화면 | `DELETE /api/friends/{studentId}` | 친구 삭제 | FR-RSV-004 | PR 대기 (core #68) |
 | 화면 · 비서 | `POST /api/reservations` | 예약 만들기 | FR-RSV-001~005 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/instant` | 지금 바로 쓰기 (누른 시각부터) | FR-RSV-103 | ✅ develop |
 | 화면 · 비서 | `GET /api/reservations/me` | 내 예약 | FR-RSV-006 | ✅ develop |
@@ -151,6 +155,37 @@
 |---|---|---|
 | `MEMBER_NOT_FOUND` | 404 | 없는 학번 또는 학생 인증 전 (둘을 구별해 알려 주지 않아요) |
 
+### 친구 — 모두 로그인 필요 (FR-RSV-004, 11/6)
+
+참여자는 **서로 수락한 친구**만 넣을 수 있어요. 이름은 친구끼리도 가린 이름(김*영)이에요.
+
+`GET /api/friends` 친구 창
+```json
+{
+  "friends":  [{ "studentId": "20230002", "name": "홍*동", "since": "2026-11-06T10:20:00+09:00" }],
+  "received": [{ "requestId": 7, "studentId": "20230003", "name": "박*연", "requestedAt": "2026-11-06T10:21:00+09:00" }],
+  "sent":     []
+}
+```
+
+`POST /api/friends/requests` `{ "studentId": "20230002" }`
+→ `201` `{ "requestId": 7, "studentId": "20230002", "name": "홍*동", "status": "PENDING" }`
+상대가 이미 나에게 요청을 보내 뒀으면 바로 친구가 되어 `200`, `"status": "ACCEPTED"`.
+
+`POST /api/friends/requests/{requestId}/accept` (받은 사람) → `200` `{ "studentId", "name", "since" }`
+`POST /api/friends/requests/{requestId}/decline` (받은 사람) → `204`. 상대는 다시 보낼 수 있어요
+`POST /api/friends/requests/{requestId}/cancel` (보낸 사람) → `204`
+`DELETE /api/friends/{studentId}` → `204`. 양쪽에서 빠지고, 이미 잡은 예약의 참여자는 그대로예요
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `FRIEND_SELF` | 400 | 나에게 요청 |
+| `MEMBER_NOT_FOUND` | 404 | 없는 학번 또는 학생 인증 전 |
+| `FRIEND_ALREADY` | 409 | 이미 친구 |
+| `FRIEND_REQUEST_ALREADY_SENT` | 409 | 이미 요청을 보냄 (수락 대기 중) |
+| `FRIEND_REQUEST_NOT_FOUND` | 404 | 내가 받은(취소는 보낸) 대기 중 요청이 아님. 두 번 누른 경우도 |
+| `FRIEND_NOT_FOUND` | 404 | 친구가 아닌 학번을 삭제 |
+
 ## 5. 예약 — 모두 로그인 필요
 
 ### `POST /api/reservations` 예약 만들기
@@ -186,6 +221,7 @@
 | `HEADCOUNT_OUT_OF_RANGE` | 400 | 방 인원(대표자 포함) 범위 밖 |
 | `USER_SUSPENDED` | 403 | 내가 노쇼 2번으로 이용 정지 중 (메시지에 끝나는 날짜, FR-RSV-106) |
 | `PARTICIPANT_SUSPENDED` | 403 | 참여자 중 이용 정지 중인 사람이 있음 (누구인지는 안 알려 줌) |
+| `PARTICIPANT_NOT_FRIEND` | 403 | 참여자 중 대표자와 친구가 아닌 사람이 있음 (누구인지는 안 알려 줌, 11/6) |
 | `RESERVATION_TIME_TAKEN` | 409 | 그 방 그 시간에 이미 예약 |
 | `OWNER_HAS_ACTIVE_RESERVATION` | 409 | 내가 대표인 끝나지 않은 예약이 이미 있음 |
 | `PARTICIPANT_TIME_TAKEN` | 409 | 참여자가 같은 시간 다른 방 예약 중 |
