@@ -94,7 +94,7 @@ AI 비서·MCP(v0.3) ─▶ core API만 호출
 | 장치 | ESP32·아두이노 (부품 오기 전에는 우노 + 노트북 USB) |
 | Jetson | Python |
 | AI 비서 | Java 21 · Spring Boot 4 · Maven (core와 같은 스택, 11/2 결정) |
-| CI | GitHub Actions · Testcontainers(PostgreSQL, H2 안 씀) · SonarQube(학교 Community 서버) · CodeRabbit(참고용) |
+| CI | GitHub Actions · Testcontainers(PostgreSQL, H2 안 씀) · SonarQube(학교 Community 서버) · CodeRabbit(`develop` 머지 조건) |
 | 배포 | Docker · docker compose · GHCR · nginx · 학교 실습 서버 |
 
 ## 7. 작업 방식
@@ -110,7 +110,9 @@ AI 비서·MCP(v0.3) ─▶ core API만 호출
 - `main`, `develop` 직접 push 금지
 - 커밋: `feat: 예약 생성 API 추가` (feat, fix, refactor, test, docs, chore) + `Refs #12`
 - PR: 제목은 커밋 형식, 본문에 요구사항 ID(`FR-RSV-001`)와 `Closes #12`. 400줄 안. **매일 15시까지**
-- 합치기: 빌드·테스트 통과 + 팀원 1명 승인 → `develop`은 Squash merge, `main`은 Merge commit([컨벤션](https://github.com/AI-go-do/docs/blob/main/conventions.md)). `main`은 새 코드 커버리지 80% 이상
+- 합치기([컨벤션](https://github.com/AI-go-do/docs/blob/main/conventions.md))
+  - `develop`: 빌드·테스트 통과 + 마지막 커밋의 CodeRabbit 리뷰가 끝나고 해결 안 된 지적 없음 + 팀원 1명 승인 → Squash merge
+  - `main`(develop → main 릴리스): CodeRabbit이 건너뛰므로 CI만 봄. 빌드·테스트 + SonarQube 팀 게이트(새 코드 커버리지 80% 이상 · 중복 3% 이하 · 새 버그·취약점 0) 통과 → Merge commit
 - 리뷰 댓글 머리말: `[필수]` `[제안]` `[질문]`
 - 이슈 제목: `[FR-RSV-001] 예약 생성`, 라벨은 종류 + 버전(`v0.1`)
 
@@ -148,7 +150,7 @@ AI 비서·MCP(v0.3) ─▶ core API만 호출
 | 시연 서버 | 학교 실습 서버 (재웅 계정) | `main`에 합치면 (버전 완료) |
 
 - 흐름: PR → 빌드·테스트 → `develop` 합침 → 이미지 → GHCR → 학교 서버 `docker compose pull && up -d` → `/actuator/health`
-- 재웅 포트 8410–8419 (8410 시연 입구, 8411 개발 입구, DB는 외부 노출 안 함). 다른 팀원은 각자 포트 범위에서 개인 테스트
+- 재웅 포트 8410–8419 중 **8414 시연 입구(`mspace.java21.net`, `main`), 8413 개발 입구(`dev-mspace.java21.net`, `develop`)**. 8410·8411은 다른 프로젝트가 써서 11/5에 옮김. DB는 외부 노출 안 함. 다른 팀원은 각자 포트 범위에서 개인 테스트
 - 되돌리기: 이미지 태그를 이전 버전으로 바꾸고 `docker compose up -d`
 - 시연 대비: 학교 서버·와이파이가 죽어도 노트북에서 전체를 띄울 수 있게 연습
 

@@ -8,7 +8,7 @@
 flowchart LR
     dev[개발자 PR] --> ci[GitHub Actions<br/>빌드 · 테스트 · SonarQube 표시]
     dev -.-> cr[CodeRabbit<br/>AI 리뷰]
-    ci --> merge[develop 합치기<br/>리뷰 1명 승인]
+    ci --> merge[develop 합치기<br/>CodeRabbit 지적 없음 + 1명 승인]
     merge --> img[이미지 빌드<br/>→ GHCR]
     img -->|SSH 배포| srv
 
@@ -84,10 +84,11 @@ gitGraph
 | 보호 | `main`, `develop` **직접 push 금지** (브랜치 보호 설정) |
 | 커밋 메시지 | `feat: 예약 생성 API 추가` (Conventional Commits: feat, fix, docs, chore, refactor, test) |
 | PR | 제목은 커밋 형식, 본문에 요구사항 ID(`FR-RSV-001`)와 이슈(`Closes #5`) |
-| develop에 합칠 때 | **빌드·테스트 통과 + 팀원 1명 승인** · Squash merge 후 브랜치 삭제 · SonarQube 결과는 표시만 |
-| main에 합칠 때 | 위 조건 + **새 코드 커버리지 80% 이상**(SonarQube 품질 게이트) · Merge commit |
+| develop에 합칠 때 | **빌드·테스트 통과 + 마지막 커밋의 CodeRabbit 리뷰 끝, 해결 안 된 지적 없음 + 팀원 1명 승인** · Squash merge 후 브랜치 삭제 · SonarQube 결과는 표시만 |
+| main에 합칠 때 | develop → main 릴리스 PR. CodeRabbit이 건너뛰므로 **CI만** 봄: 빌드·테스트 + **SonarQube 팀 게이트**(새 코드 커버리지 80% 이상 · 중복 3% 이하 · 새 버그·취약점 0) · Merge commit |
+| SonarQube 팀 게이트 | 학교 공용 계정은 서버 게이트를 바꿀 권한이 없어, 워크플로가 방금 올린 분석 값을 API로 읽어 판정(`.github/scripts/sonar-team-gate.sh`, assistant #88 머지 · core #78 PR 대기). 막는 것: 새 코드 커버리지 80% 미만, 중복 3% 초과, 새 버그·취약점(신뢰성·보안 등급 A 아님). 막지 않는 것: 새 이슈(코드 스멜)·핫스팟 검토는 대시보드에만. 분석 실패·5분 초과·토큰 없음·커버리지 값 누락은 실패 |
 | 커버리지 공유 | 매일 스크럼에서 develop 커버리지 숫자 공유 |
-| CodeRabbit | 참고용 AI 리뷰. 사람 리뷰를 대신하지 않음 |
+| CodeRabbit | AI 리뷰. `develop` 머지 조건(지적이 남아 있으면 합치지 않음). 사람 리뷰를 대신하지 않음. main 릴리스 PR은 리뷰하지 않음 |
 
 커밋·PR 양식, 코드·API·DB 이름 규칙은 [팀 컨벤션](../conventions.md)에 있다.
 
@@ -124,6 +125,7 @@ gitGraph
 | 8414 | 시연 서버 입구 (`main`, `mspace.java21.net`, compose 프로젝트 `mspace-prod`, `.env.prod`) |
 
 - 8410·8411은 다른 프로젝트(블로그)가 쓰고 있어 11-05에 8413·8414로 옮겼다.
+- 학교 nginx(도메인 → 우리 포트)의 업로드 한도는 **1MB**다. 사진은 앱이 900KB 아래 JPEG로 줄여 보내서 nginx 설정을 바꾸지 않는다(web #26). 더 큰 파일이 필요하면 강사님께 한도를 부탁한다.
 - 밖으로 여는 포트는 **게이트웨이 하나**다. web·core·mcp·agent·Redis·DB는 compose 내부 네트워크로만 연결하고 포트를 열지 않는다.
 - 게이트웨이도 `0.0.0.0`으로 열지 않는다(Docker 포트는 ufw를 건너뛴다). 학교 서버는 `BIND_ADDR=10.116.64.12`, 맥은 기본 `127.0.0.1`.
 
@@ -158,7 +160,7 @@ gitGraph
 | CI | PR마다 자동으로 빌드·테스트 |
 | CD | 합치면 자동으로 서버에 배포 |
 | 커버리지 | 테스트가 실행해 본 코드의 비율 |
-| 품질 게이트 | SonarQube의 합격선. 우리는 새 코드 커버리지 80% |
+| 품질 게이트 | SonarQube의 합격선. 우리는 새 코드 커버리지 80% · 중복 3% · 새 버그·취약점 0 |
 | Docker 이미지 | 앱과 실행 환경을 통째로 담은 "상자" |
 | GHCR | GitHub의 이미지 "창고". Actions가 올리고 서버가 받아 간다 |
 | docker compose | 상자 여러 개를 한 번에 띄우는 설정 파일 |
