@@ -152,8 +152,10 @@
 ### `GET /api/members?studentId=20230002` 참여자 학번 검색 — 로그인 필요
 
 ```json
-{ "studentId": "20230002", "name": "홍*동" }
+{ "studentId": "20230002", "name": "홍*동", "me": false }
 ```
+
+`me`는 찾은 사람이 나(로그인한 대표자)면 `true`예요. 대표자는 이미 들어 있으니 화면은 **추가** 버튼 대신 "추가됨"을 보여 줘요. 그래도 대표자 학번을 `participantStudentIds`에 넣으면 예약 만들기가 `400 PARTICIPANT_DUPLICATE`로 막아요.
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
