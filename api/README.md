@@ -34,8 +34,8 @@
 | 관리자 | `POST /api/reports/{id}/judge` | 신고 판정 + 경고·정지·알림 | FR-RPT-103·104 | ✅ develop |
 | 관리자 | `POST /api/reservations/{id}/force-checkout` | 강제 퇴실 (퇴출) | FR-RPT-104 | ✅ develop |
 | 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 | FR-WEB-101 | PR 대기 (core #76) |
-| 관리자 | `GET /api/penalties?days=30` | 경고·정지 목록 | FR-WEB-101 | PR 대기 (core #75) |
-| 관리자 | `GET /api/stats/usage?from=&to=` | 이용 통계 (이용률·노쇼율·시간대·센서) | FR-WEB-101 | PR 대기 (core #74) |
+| 관리자 | `GET /api/penalties?days=30` | 경고·정지 목록 | FR-WEB-101 | ✅ develop |
+| 관리자 | `GET /api/stats/usage?from=&to=` | 이용 통계 (이용률·노쇼율·시간대·센서) | FR-WEB-101 | ✅ develop |
 | 화면 | `GET /api/notifications/me` | 내 알림함 (최근 50개, 읽음 여부) | FR-NTF-103 | ✅ develop |
 | 화면 | `GET /api/notifications/me/unread-count` | 안 읽은 알림 개수 (종 아이콘 점) | FR-NTF-103 | ✅ develop |
 | 화면 | `POST /api/notifications/{id}/read` | 알림 하나 읽음 | FR-NTF-103 | ✅ develop |
@@ -86,7 +86,7 @@
 ### `POST /api/auth/login` 번호 확인 → 토큰
 
 ```json
-{ "email": "a@chosun.ac.kr", "code": "123456", "name": "김지영", "studentId": "20230001" }
+{ "email": "a@chosun.ac.kr", "code": "123456", "name": "테스트", "studentId": "20230001" }
 ```
 `name`·`studentId`는 처음 가입할 때만 넣어요. → `200`
 
@@ -436,15 +436,70 @@
 | `RESERVATION_NOT_FOUND` | 404 | 없는 예약 |
 | `RESERVATION_NOT_IN_USE` | 409 | 아직 입실 전이거나 이미 끝난 예약 |
 
-### 관리자 화면용 API (PR 대기, core #74~#76)
+### 관리자 화면용 API
 
-모두 관리자만(`403 ADMIN_ONLY`). 머지되면 모양을 자세히 적어요.
+모두 관리자만(`403 ADMIN_ONLY`). 관리자 화면이라 학번·이름을 가리지 않고 그대로 보여 줘요.
 
-| 주소 | 하는 일 |
+| 주소 | 상태 | 하는 일 |
+|---|---|---|
+| `GET /api/penalties?days=30` | ✅ develop (core #75) | 경고·정지 목록 |
+| `GET /api/stats/usage?from=&to=` | ✅ develop (core #74) | 이용 통계 + 센서 값 |
+| `GET /api/reports/{id}/evidence` | PR 대기 (core #76) | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음). 방 카메라 자동 신고는 `reporter: null` |
+
+#### `GET /api/penalties?days=30` 경고·정지 목록
+
+- `days`: 1–365, 빼면 30. 틀리면 `400`
+- 경고는 최근 `days`일 안에 받은 것, 정지는 그 사이 끝났거나 아직 진행 중인 것. 둘 다 최근 것부터
+
+```json
+{ "days": 30,
+  "warnings": [{ "id": 3, "member": { "id": 12, "studentId": "20240001", "name": "테스트" },
+                 "reason": "VIOLATION", "reportId": 7, "reservationId": 11,
+                 "createdAt": "2026-11-06T14:00:00+09:00" }],
+  "suspensions": [{ "scope": "USE", "id": 1, "member": { "id": 12, "studentId": "20240001", "name": "테스트" },
+                    "reason": "WARNINGS", "startsAt": "2026-11-06T14:00:00+09:00",
+                    "endsAt": "2026-11-20T14:00:00+09:00", "active": true }] }
+```
+
+| 칸 | 값 |
 |---|---|
-| `GET /api/reports/{id}/evidence` | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음) |
-| `GET /api/penalties?days=30` | 최근 days일(1–365) 경고(받은 사람 학번·이름, 이유 `VIOLATION`·`FALSE_REPORT`, 신고·예약 id)와 정지(이용 `USE`·신고 `REPORT`, 진행 중이면 `active`) |
-| `GET /api/stats/usage?from=&to=` | 서울 날짜 기준, to 포함, 92일까지(빼면 오늘까지 7일). 방별·전체 예약 수(상태별), 노쇼율·실사용률·이용률, 평균 이용 시간, 시간대별(0–23시), CO2 평균·최고·1000ppm 초과 비율, 예약 없이 사람이 있던 시간 |
+| `warnings[].reason` | `VIOLATION`(사실 판정, 이용한 방) · `FALSE_REPORT`(허위 신고) |
+| `warnings[].reservationId` | 경고 근거 예약(이용한 방). 허위 신고 경고는 `null` |
+| `suspensions[].scope` | `USE`(예약·참여 정지) · `REPORT`(신고만 정지) |
+| `suspensions[].reason` | `NO_SHOW`(노쇼 누적) · `WARNINGS`(위반 경고 누적) · `FALSE_REPORT`(허위 신고 경고 누적) |
+| `suspensions[].active` | 지금 진행 중이면 `true` |
+
+#### `GET /api/stats/usage?from=2026-11-01&to=2026-11-30` 이용 통계
+
+- 날짜는 서울 기준, `to` 포함. 둘 다 빼면 오늘까지 7일. 92일 넘거나 `from`이 `to`보다 늦으면 `400`
+- `total`은 전체(`roomId`·`roomName`은 `null`), `rooms[]`는 방별, `byHour[]`는 서울 시작 시각 기준 0–23시(예약은 취소 뺀 수, `used`는 입실한 수, 예약 없는 시간은 빠짐)
+
+```json
+{ "from": "2026-11-01", "to": "2026-11-07", "days": 7,
+  "total": { "roomId": null, "roomName": null,
+             "reservations": { "total": 40, "canceled": 3, "pending": 2, "noShow": 4, "used": 31, "forced": 1,
+                               "awayReleased": 2, "autoCheckedOut": 10 },
+             "rates": { "noShow": 0.114, "actualUse": 0.886, "utilization": 0.231 },
+             "minutes": { "booked": 3600, "used": 2900, "avgUsed": 94 },
+             "shortUses": 5, "uniqueUsers": 18,
+             "sensor": { "co2Readings": 1200, "co2AvgPpm": 720, "co2MaxPpm": 1350, "co2OverRate": 0.08,
+                         "thresholdPpm": 1000, "ventilationAlerts": 3,
+                         "occupiedMinutes": 2800, "occupiedWithoutReservationMinutes": 40 } },
+  "rooms": [{ "roomId": 1, "roomName": "창작실 1", "...": "total과 같은 모양" }],
+  "byHour": [{ "hour": 14, "reservations": 6, "used": 5 }] }
+```
+
+| 칸 | 뜻 |
+|---|---|
+| `reservations.total` | 시작 시각이 기간 안인 예약 (취소 포함) |
+| `reservations.pending` | 아직 시작 안 했거나 입실 기다리는 예약 (`BOOKED`) |
+| `reservations.used` | 입실한 예약 (사용 중 포함). `forced`는 그중 관리자 강제 퇴실 |
+| `rates.*` | 0–1, 소수 셋째 자리. 분모가 0이면 `null`. `noShow`·`actualUse` = 노쇼·입실 / (취소·대기 뺀 예약), `utilization` = 실제 이용 시간 / 기간 중 지난 시간(하루 24시간) |
+| `minutes` | `booked` 취소 뺀 예약 시간 합, `used` 입실 ~ 퇴실(사용 중이면 지금) 합, `avgUsed` = used / 입실 예약 수 |
+| `shortUses` | 예약 시간의 절반도 안 쓰고 끝난 예약 수 |
+| `uniqueUsers` | 기간 안에 입실한 예약의 서로 다른 회원 수 (대표자·참여자 모두) |
+| `sensor.*` | CO2 평균·최고·기준(`thresholdPpm`) 넘은 비율, 환기 알림 수. 재실 분은 센서가 바뀔 때만 기록해서, 바뀐 기록 사이를 그 상태로 본 근삿값 |
+| `sensor.occupiedWithoutReservationMinutes` | 예약 없이 사람이 있던 시간 (무단 사용 의심) |
 
 ## 5-2. 알림함 — 모두 로그인 필요 (FR-NTF-103)
 
@@ -731,4 +786,4 @@ PUT { "classes": [ { "dayOfWeek": "MON", "startTime": "09:00", "endTime": "10:15
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
 | 센서용 장치 토큰 | 키패드와 같은 토큰 하나 (6-2장 "정할 것") | 장치마다 따로 둘지 정하기(지영·재웅). 11/6 2번 방 키패드 토큰 추가 예정 |
 | 입실 방식 NFC · QR | 8차 회의(11/6): 시험용 방 1실에서 키패드 → NFC → QR. 지금 API는 키패드(6장)만 | 요구사항 Q-16이 정해지면 6장에 방식별 모양 추가(지영·수연) |
-| 관리자 통계·경고 목록·증거 사진 | core #74~#76 PR 대기 (5장 "관리자 화면용 API") | 머지되면 0장 상태 ✅로, 응답 예시 추가 |
+| 증거 사진 | core #76 PR 대기 (5장 "관리자 화면용 API") | 머지되면 0장 상태 ✅로, 응답 예시 추가 |
