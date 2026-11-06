@@ -12,7 +12,7 @@
 | 화면 | `POST /api/auth/login` | 인증번호 확인 → 토큰 받기 | FR-AUTH-001 | ✅ develop |
 | 화면 | `POST /api/auth/refresh` | 자동 로그인 (토큰 새로 받기) | FR-AUTH-002 | ✅ develop |
 | 화면 | `POST /api/auth/logout` | 로그아웃 | FR-AUTH-002 | ✅ develop |
-| nginx | `GET /api/auth/check` | 비서로 넘기기 전 토큰 확인 | FR-AUTH-002 | ✅ develop |
+| (안 씀) | `GET /api/auth/check` | 토큰 확인. 11/4 게이트웨이로 바꾼 뒤로는 게이트웨이가 JWT를 직접 확인해서 부르는 곳이 없어요 | FR-AUTH-002 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms` | 방 목록 | FR-ROOM-001 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms/availability?date=` | 하루 30분 칸별 빈방 | FR-WEB-004 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms/status` | 방 현황 (지금 비었는지, 다음 예약, 센서 재실) | FR-DEV-102 | ✅ develop |
@@ -37,12 +37,16 @@
 | 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | ✅ develop |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
-| 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT | 브랜치 (assistant) |
-| 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT | 브랜치 (assistant) |
-| 화면 | `POST /api/agent/confirmations/{token}` | 확인 카드 [확인] | FR-AGT | 브랜치 (assistant) |
-| 화면 | `GET /api/agent/reservations/{id}/access-code` | 비서 입실 번호 카드 | FR-AGT | 브랜치 (assistant) |
+| 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
+| 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT-101 | ✅ develop (assistant) |
+| 화면 | `DELETE /api/agent/chat/history` | 새 대화 (서버가 기억한 대화 지우기) | FR-AGT-101 | ✅ develop (assistant) |
+| 화면 | `POST /api/agent/confirmations/{token}` | 확인 카드 [확인] | FR-AGT-101 | ✅ develop (assistant) |
+| 화면 | `GET /api/agent/reservations/{id}/access-code` | 비서 입실 번호 카드 | FR-AGT-101 | ✅ develop (assistant) |
+| 화면 | `GET`·`PUT`·`DELETE /api/agent/schedule` | 내 시간표 보기·통째로 바꾸기·지우기 | FR-AGT-102a | ✅ develop (assistant) |
+| 화면 | `POST /api/agent/schedule/parse` | 시간표 캡처 읽기 (초안만, 저장 안 함) | FR-AGT-102a | ✅ develop (assistant) |
+| 화면 | `GET /api/agent/briefing` | 오늘 브리핑 (시간표·예약·빈 방·수업 뒤 칸, 모델 안 거침) | FR-AGT-102b·103 | ✅ develop (assistant) |
 
-`/api/agent/`로 시작하면 nginx가 비서 서버(agent)로, 나머지는 core로 보내요.
+`/api/agent/`로 시작하면 API 게이트웨이가 비서 서버(agent)로, 나머지 `/api/`는 core로 보내요. 게이트웨이가 로그인 토큰을 먼저 확인해요([아키텍처](../architecture/README.md)).
 
 ## 1. 공통 규칙
 
@@ -119,9 +123,9 @@
 ```
 → 항상 `204`. 화면도 들고 있던 두 토큰을 지워요.
 
-### `GET /api/auth/check` 토큰 확인 (nginx 전용)
+### `GET /api/auth/check` 토큰 확인 (지금은 안 씀)
 
-`Authorization: Bearer` → 맞으면 `204`, 아니면 `401`. nginx `auth_request`가 `/api/agent/` 앞에서 불러요.
+`Authorization: Bearer` → 맞으면 `204`, 아니면 `401`. 예전 입구 nginx의 `auth_request`용이었고, 11/4 게이트웨이로 바꾼 뒤로는 게이트웨이가 토큰을 직접 확인해요.
 
 ## 3. 방
 
@@ -495,7 +499,9 @@ CO2:
 - 장치 토큰: 지금 core는 키패드와 같은 토큰 하나뿐이에요. 센서용 토큰을 장치마다 따로 두고 토큰에 방·장치를 묶을지(다르면 `403 DEVICE_ROOM_MISMATCH`) 정하기 (지영·재웅)
 - API 게이트웨이: 장치 토큰은 JWT가 아니라서 `/api/sensor-events`를 `/api/access/verify`처럼 공개 경로로 넣기 (재웅)
 
-## 7. 비서 (`/api/agent`) — 로그인 필요, 아직 브랜치
+## 7. 비서 (`/api/agent`) — 로그인 필요, assistant `develop`
+
+> 자세한 입출력·오류는 비서 저장소 [도구 명세](https://github.com/AI-go-do/mspace-assistant/blob/develop/docs/도구-명세.md)·[설계](https://github.com/AI-go-do/mspace-assistant/blob/develop/docs/설계.md)가 기준이에요. 여기는 화면이 부르는 모양만 요약해요.
 
 비서 서버는 받은 `Authorization`을 그대로 core에 넘겨요. 그래서 비서도 학생 본인 권한만큼만 할 수 있어요.
 
@@ -523,14 +529,20 @@ CO2:
     "confirmations": [ { "tool": "create_reservation", "token": "c_9f2...", "summary": "1번 방 · 11/4 14:00–16:00",
                          "notes": [], "needsParticipants": 2, "expiresAt": "2026-11-03T16:10:00+09:00" } ],
     "accessCodeCards": [ { "reservationId": 12 } ],
-    "toolCalls": 2, "stoppedByLimit": false
+    "toolCalls": 2, "stoppedByLimit": false,
+    "tools": ["find_available_rooms"], "hints": [], "suggestions": ["2시에 1번 방 2시간 잡아 줘"]
   },
   "error": null
 }
 ```
 실패하면 `200 { "status": "FAILED", "result": null, "error": { "code": "LLM_RATE_LIMITED", "message": "..." } }`. `error.message`를 그대로 보여 주면 돼요.
 
-쓰기(예약·취소·퇴실)는 바로 하지 않고 확인 카드(`confirmations`)로 돌려줘요. 입실 번호는 모델에 보내지 않아서 `accessCodeCards`에는 예약 id만 있어요.
+쓰기(예약·지금 바로 쓰기·취소·퇴실·연장)는 바로 하지 않고 확인 카드(`confirmations`)로 돌려줘요. 입실 번호는 모델에 보내지 않아서 `accessCodeCards`에는 예약 id만 있어요.
+
+- `tools`: 이번 답에서 부른 도구 이름 (성공률 측정용)
+- `hints`: 화면 신호. `OPEN_SCHEDULE`이면 시간표가 없어서 답한 것 → 답 아래 [내 시간표 넣기] 버튼
+- `suggestions`: 답 아래 빠른 답장 버튼 글(최대 3개). 누르면 그 글을 그대로 채팅으로 보내요
+- 대화 맥락은 서버가 학생별로 24시간 기억해요(Redis). 화면이 `history`를 보내지 않아도 이어져요
 
 - 결과에는 확인 토큰이 들어 있어서 **접수한 학생만** 볼 수 있어요. 남의 `jobId`는 없는 것과 같은 `404`. 응답은 `Cache-Control: no-store`
 - 끝난 결과는 5분 보관해요. 그 뒤에는 `404`라 다시 보내야 해요
@@ -548,6 +560,10 @@ CO2:
 | `LLM_UNAVAILABLE`, `LLM_NOT_CONFIGURED` | `error.code` | 조회(`FAILED`) | LLM 응답 없음, 키 설정 안 됨 |
 | `TOOLS_UNAVAILABLE` | `error.code` | 조회(`FAILED`) | MCP 서버 연결 안 됨 |
 | `AGENT_FAILED` | `error.code` | 조회(`FAILED`) | 그 밖의 오류 |
+
+### `DELETE /api/agent/chat/history` 새 대화
+
+서버가 기억한 앞 대화를 지워요 → `204`. 화면도 자기 대화 목록을 비워요. 그 학생의 채팅이 아직 도는 중이면 `409 CHAT_IN_PROGRESS`(끝날 때 옛 대화를 다시 저장하니까), Redis에 닿지 못하면 `503 MEMORY_UNAVAILABLE`.
 
 ### `POST /api/agent/confirmations/{token}` 확인 카드 [확인]
 
@@ -594,16 +610,49 @@ CO2:
 | `RESERVATION_FINISHED` | 409 | 이미 끝났거나 취소된 예약 |
 | `ACCESS_CODE_UNAVAILABLE` | 502 | core가 번호를 주지 않음 → 예약 화면에서 확인 |
 
-## 8. 코드와 문서가 아직 다른 곳
+### `GET`·`PUT`·`DELETE /api/agent/schedule` 내 시간표 (FR-AGT-102a)
+
+학생이 화면에서 직접 넣는 시간표예요. 모델은 고치지 못하고 읽기 도구 `my_schedule`·`week_plan`으로만 봐요. 저장은 비서 Redis(`agent:schedule:<학생 키>`, TTL 없음).
+
+```json
+PUT { "classes": [ { "dayOfWeek": "MON", "startTime": "09:00", "endTime": "10:15", "name": "자료구조" } ] }
+→ 200 { "classes": [ ... ], "updatedAt": "2026-11-06T10:00:00+09:00" }
+```
+`PUT`은 통째로 바꾸기. `GET`은 같은 모양(없으면 `404 NO_SCHEDULE`), `DELETE`는 `204`.
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | 요일 `MON`~`SUN`, `HH:mm`, 시작 < 끝, 과목명 1~30자, 1~40칸이 아님 |
+| `SCHEDULE_OVERLAP` | 400 | 같은 요일에 시간이 겹침 |
+| `NO_SCHEDULE` | 404 | 넣은 시간표 없음 (`GET`) |
+| `SCHEDULE_UNAVAILABLE` · `TOOLS_UNAVAILABLE` | 503 | Redis · mcp-server에 닿지 못함 |
+
+### `POST /api/agent/schedule/parse` 시간표 캡처 읽기
+
+`multipart/form-data`의 `image` 한 장(PNG·JPEG·WebP, 5MB까지) → `200 { "classes": [ ... ], "dropped": 1, "note": "..." }`. Gemini가 읽은 **초안**만 주고 저장하지 않아요. `classes`는 `PUT` 본문과 같은 모양이라 확인 카드에서 고친 뒤 그대로 `PUT`해요. 하나도 못 읽으면 `classes: []`(오류 아님). 사진이 없거나 형식·크기가 틀리면 `400 INVALID_IMAGE`, 모델 한도·장애는 `429 LLM_RATE_LIMITED`·`503 LLM_UNAVAILABLE`, 그림을 못 읽는 모델(Ollama)이면 `503 LLM_NOT_CONFIGURED`. 캡처에 이름·학번이 보이면 외부 AI로 나가니 잘라서 올리게 안내해요([개인정보 처리방침](../privacy/README.md)).
+
+### `GET /api/agent/briefing` 오늘 브리핑
+
+앱을 열 때 1번 불러요. 서버가 `my_schedule`(오늘)·`my_reservations`·`room_status`를 직접 부르고(모델 안 거침) 한 문단 `text`로 묶어요. [듣기]는 이 `text`를 브라우저 `speechSynthesis`로 읽어요.
+
+```json
+{ "date": "2026-11-06", "dayOfWeek": "금", "schedule": { "classes": [ ... ], "lastClassEnd": "14:50", "note": null },
+  "afterClass": { "roomName": "2번 방", "start": "15:30", "end": "17:30", "suggestion": "15:30 2번 방 2시간 잡아 줘", "note": null },
+  "reservations": { "items": [], "note": null }, "rooms": { "availableNames": ["2번 방"], "earliestLimit": "09:30", "note": null },
+  "text": "11월 6일 금요일 브리핑이에요. ...", "hints": [], "suggestions": ["15:30 2번 방 2시간 잡아 줘"] }
+```
+- 도구 하나가 실패하면 그 칸만 `null` + `note`, 나머지는 그대로. 시간표가 없으면 `hints: ["OPEN_SCHEDULE"]`
+- `afterClass`: 오늘 수업이 있고 대표자 예약이 없을 때만 수업 뒤 가장 이른 칸 하나. `suggestions` 버튼을 누르면 채팅으로 보내 확인 카드까지 가요
+- `Cache-Control: no-store`. 오류는 `401 UNAUTHORIZED`만
+
+## 8. 코드와 문서가 아직 다른 곳 (11/6 점검)
+
+11/3~5에 적었던 줄(연장 #51, 신고 #52, 노쇼 벌칙 #58, `created_via` #45 + 비서 #54, 자리 비움 `AWAY_RELEASED`, 센서 #60·게이트웨이 공개 경로, 비서 API)은 모두 develop에 머지돼 지웠어요.
 
 | 무엇 | 지금 | 할 일 |
 |---|---|---|
-| `GET /api/rules` | core #57로 develop에 머지 (6-1장) | 비서 `usage_rules` 도구가 이 응답을 쓰는지 확인(영준) |
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
-| 비서 API | 도구(MCP) 쪽 #26·#29, 에이전트 쪽 #31은 develop에 머지됨. #30·#33·#34·#40·#41은 리뷰 중 | 모두 머지되면 0장 상태 ✅로 |
-| `created_via` | core PR #45: `X-Created-Via: AGENT`면 AGENT로 저장 | #45 머지 뒤 비서(MCP)가 core 호출에 `X-Created-Via: AGENT`를 붙이기(영준) |
-| 연장 `POST /api/reservations/{id}/continue` | core PR #51 리뷰 중 (#45 다음 머지) | 머지되면 0장 상태 ✅로, 비서 `continue_reservation` 도구 추가(영준) |
-| 신고 `POST /api/reports` | core PR #52 리뷰 중 (#51 다음 머지). 사진·결과 알림·관리자 판정(FR-RPT-103) 없음 | 머지되면 0장 상태 ✅로. 판정 API·화면은 다음 PR(지영) |
-| 자리 비움 `AWAY_RELEASED` (v0.2) | 요구사항 FR-DEV-103(11/3 회의 결정)에만 있음 | core에 상태 추가, 10·15분 판단 스케줄러, 30일 3번 = 노쇼 1번 계산(지영·수연) |
-| 노쇼 벌칙 `USER_SUSPENDED`·`PARTICIPANT_SUSPENDED` | core 브랜치 `feat/rsv-no-show-penalty`(V9 `user_suspension`), PR 대기 | 머지되면 이 줄 지우기 |
-| 재실 센서 `POST /api/sensor-events` | 형식은 6-2장(11/5 지영·수연 확정). core #60 리뷰 중. 장치 코드는 mspace-device #24 (지금은 보내지 않고 화면에만 출력) | core #60 머지(지영), 센서용 장치 토큰(지영·재웅), API 게이트웨이 공개 경로(재웅) |
+| 알림 읽음 | core PR #69 리뷰 중 (5-2장) | 머지되면 0장 상태 ✅로 |
+| 센서용 장치 토큰 | 키패드와 같은 토큰 하나 (6-2장 "정할 것") | 장치마다 따로 둘지 정하기(지영·재웅). 11/6 2번 방 키패드 토큰 추가 예정 |
+| 입실 방식 NFC · QR | 8차 회의(11/6): 시험용 방 1실에서 키패드 → NFC → QR. 지금 API는 키패드(6장)만 | 요구사항 Q-16이 정해지면 6장에 방식별 모양 추가(지영·수연) |
+| 관리자 통계 | 8차 회의: 이용률·실사용률(노쇼)·평균 이용 시간·시간대별. 지금은 WEB/AGENT 건수(`/stats`)만 | 11/9 점검 전 명세 먼저(지영 제안) |
