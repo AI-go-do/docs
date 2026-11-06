@@ -211,7 +211,7 @@
 
 ```json
 { "id": 12, "roomId": 1, "startAt": "2026-11-03T14:00:00+09:00", "endAt": "2026-11-03T16:00:00+09:00",
-  "status": "BOOKED", "headcount": 3, "accessCode": "482913" }
+  "status": "BOOKED", "headcount": 3, "accessCode": "482913", "qrText": "MSPACE:1:482913" }
 ```
 
 | 오류 | 상태 | 언제 |
@@ -261,10 +261,13 @@
   { "id": 12, "room": { "id": 1, "name": "1번 방" },
     "startAt": "2026-11-03T14:00:00+09:00", "endAt": "2026-11-03T16:00:00+09:00",
     "status": "BOOKED", "owner": true, "accessCode": "482913",
-    "participants": [ { "name": "김*영", "owner": true }, { "name": "홍*동", "owner": false } ] }
+    "participants": [ { "name": "김*영", "owner": true }, { "name": "홍*동", "owner": false } ],
+    "qrText": "MSPACE:1:482913" }
 ]
 ```
 `accessCode`는 대표자이고 끝나지 않은 예약(`BOOKED`·`IN_USE`)일 때만 값이 있어요. 참여자이거나, 퇴실·자동 퇴실·자리 비움 퇴실·취소·노쇼된 예약이면 `null`이에요.
+
+`qrText`는 폰에 띄울 **입실 QR 안의 글자**예요(11/6, core #71 PR 대기). 형식은 `MSPACE:<방 번호>:<입실 번호>`이고, `accessCode`가 `null`이면 `qrText`도 `null`이에요. 예약 만들기·지금 바로 쓰기·연장하기 응답에도 있어요. core는 QR 그림을 만들지 않고, 화면이 이 글자로 QR을 그려요. 문 앞 웹캠(mspace-device `qr_door.py`)이 읽어서 키패드와 같은 `POST /api/access/verify`로 물어요(`deviceId` `qr-<방>`). 그래서 열림 규칙과 5번 틀리면 1분 잠금(방 단위)도 키패드와 같아요.
 
 예약 상태(`status`): `BOOKED` 예약됨 → `IN_USE` 입실 → `CHECKED_OUT` 퇴실 / `AUTO_CHECKED_OUT` 시간 끝나 자동 퇴실 / `AWAY_RELEASED` 자리 비움 자동 퇴실(재실 센서 15분 비어 있음, v0.2 FR-DEV-103) / `NO_SHOW` 입실 마감까지 안 옴(미리 예약은 시작 + 15분, 지금 바로 쓰기는 누른 뒤 10분. 끝 시각이 먼저 오면 끝 시각) / `CANCELED` 취소. 노쇼·자동 퇴실은 core가 1분마다 바꿔요.
 
