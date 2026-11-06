@@ -31,11 +31,15 @@
 | 관리자 | `GET /api/reservations/stats` | WEB/AGENT 예약 건수 | NFR-COM-008 | ✅ develop |
 | 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | ✅ develop |
 | 관리자 | `GET /api/reports?verdict=OPEN` | 신고 목록 | FR-RPT-103 | ✅ develop |
-| 관리자 | `POST /api/reports/{id}/judge` | 신고 판정 (판정 뒤 경고·정지·알림은 core #70 PR 대기) | FR-RPT-103·104 | ✅ develop |
+| 관리자 | `POST /api/reports/{id}/judge` | 신고 판정 + 경고·정지·알림 | FR-RPT-103·104 | ✅ develop |
+| 관리자 | `POST /api/reservations/{id}/force-checkout` | 강제 퇴실 (퇴출) | FR-RPT-104 | ✅ develop |
+| 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 | FR-WEB-101 | PR 대기 (core #76) |
+| 관리자 | `GET /api/penalties?days=30` | 경고·정지 목록 | FR-WEB-101 | PR 대기 (core #75) |
+| 관리자 | `GET /api/stats/usage?from=&to=` | 이용 통계 (이용률·노쇼율·시간대·센서) | FR-WEB-101 | PR 대기 (core #74) |
 | 화면 | `GET /api/notifications/me` | 내 알림함 (최근 50개, 읽음 여부) | FR-NTF-103 | ✅ develop |
-| 화면 | `GET /api/notifications/me/unread-count` | 안 읽은 알림 개수 (종 아이콘 점) | FR-NTF-103 | PR 대기 (core #69) |
-| 화면 | `POST /api/notifications/{id}/read` | 알림 하나 읽음 | FR-NTF-103 | PR 대기 (core #69) |
-| 화면 | `POST /api/notifications/read-all` | 내 알림 모두 읽음 | FR-NTF-103 | PR 대기 (core #69) |
+| 화면 | `GET /api/notifications/me/unread-count` | 안 읽은 알림 개수 (종 아이콘 점) | FR-NTF-103 | ✅ develop |
+| 화면 | `POST /api/notifications/{id}/read` | 알림 하나 읽음 | FR-NTF-103 | ✅ develop |
+| 화면 | `POST /api/notifications/read-all` | 내 알림 모두 읽음 | FR-NTF-103 | ✅ develop |
 | 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | ✅ develop |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
@@ -400,7 +404,6 @@
 - 직전 이용 예약: 같은 방, 신고자 예약 제외, 신고 전에 입실한 예약 중 가장 최근. 노쇼(입실 안 함)는 빼요. 찾지 못하면 경고 없음
 - 30일 안에 경고 3회면 14일 정지. 사용 위반은 예약·연장 정지(`403 USER_SUSPENDED`), 허위 신고는 신고만 정지(`403 REPORT_SUSPENDED`). 두 경고는 따로 세요
 - 판정·경고·정지·알림은 한 번에 저장돼요. 하나라도 실패하면 판정도 안 돼요
-- 판정 뒤 벌칙은 core #70 PR 대기. 머지 전 develop은 판정만 해요
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
@@ -409,6 +412,36 @@
 | `REPORT_NOT_FOUND` | 404 | 없는 신고 |
 | `REPORT_NOT_JUDGEABLE` | 409 | 소음 신고 (판정 대상 아님) |
 | `REPORT_ALREADY_JUDGED` | 409 | 이미 판정함 |
+
+### `POST /api/reservations/{id}/force-checkout` 강제 퇴실 — 관리자만
+
+사용 중(`IN_USE`)인 예약을 관리자가 바로 끝내요(FR-RPT-104 퇴출, core #73). 본문은 빼도 돼요.
+```json
+{ "reason": "신고 확인, 소음 계속" }
+```
+→ `200 { "id": 12, "status": "CHECKED_OUT" }`
+
+- 그 예약의 대표자·참여자 모두에게 알림 `FORCED_CHECKOUT`("관리자가 퇴실 처리했어요", 사유가 있으면 본문에 붙음)
+- 사유는 200자까지. 알림에 그대로 보이니 이름·학번은 쓰지 않아요
+- 보통 퇴실과 같은 조건부 UPDATE라 두 관리자가 동시에 눌러도 한 번만 돼요. 퇴실·알림 저장은 한 트랜잭션
+- 경고·정지는 따로 걸지 않아요(벌칙은 신고 판정이 맡음)
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | 사유가 200자를 넘음 |
+| `ADMIN_ONLY` | 403 | 관리자가 아님 |
+| `RESERVATION_NOT_FOUND` | 404 | 없는 예약 |
+| `RESERVATION_NOT_IN_USE` | 409 | 아직 입실 전이거나 이미 끝난 예약 |
+
+### 관리자 화면용 API (PR 대기, core #74~#76)
+
+모두 관리자만(`403 ADMIN_ONLY`). 머지되면 모양을 자세히 적어요.
+
+| 주소 | 하는 일 |
+|---|---|
+| `GET /api/reports/{id}/evidence` | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음) |
+| `GET /api/penalties?days=30` | 최근 days일(1–365) 경고(받은 사람 학번·이름, 이유 `VIOLATION`·`FALSE_REPORT`, 신고·예약 id)와 정지(이용 `USE`·신고 `REPORT`, 진행 중이면 `active`) |
+| `GET /api/stats/usage?from=&to=` | 서울 날짜 기준, to 포함, 92일까지(빼면 오늘까지 7일). 방별·전체 예약 수(상태별), 노쇼율·실사용률·이용률, 평균 이용 시간, 시간대별(0–23시), CO2 평균·최고·1000ppm 초과 비율, 예약 없이 사람이 있던 시간 |
 
 ## 5-2. 알림함 — 모두 로그인 필요 (FR-NTF-103)
 
@@ -688,12 +721,11 @@ PUT { "classes": [ { "dayOfWeek": "MON", "startTime": "09:00", "endTime": "10:15
 
 ## 8. 코드와 문서가 아직 다른 곳 (11/6 점검)
 
-11/3~5에 적었던 줄(연장 #51, 신고 #52, 노쇼 벌칙 #58, `created_via` #45 + 비서 #54, 자리 비움 `AWAY_RELEASED`, 센서 #60·게이트웨이 공개 경로, 비서 API)은 모두 develop에 머지돼 지웠어요.
+11/3~6에 적었던 줄(알림 읽음 #69, 판정 벌칙 #70, 강제 퇴실 #73, 연장 #51, 신고 #52, 노쇼 벌칙 #58, `created_via` #45 + 비서 #54, 자리 비움 `AWAY_RELEASED`, 센서 #60·게이트웨이 공개 경로, 비서 API)은 모두 develop에 머지돼 지웠어요.
 
 | 무엇 | 지금 | 할 일 |
 |---|---|---|
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
-| 알림 읽음 | core PR #69 리뷰 중 (5-2장) | 머지되면 0장 상태 ✅로 |
 | 센서용 장치 토큰 | 키패드와 같은 토큰 하나 (6-2장 "정할 것") | 장치마다 따로 둘지 정하기(지영·재웅). 11/6 2번 방 키패드 토큰 추가 예정 |
 | 입실 방식 NFC · QR | 8차 회의(11/6): 시험용 방 1실에서 키패드 → NFC → QR. 지금 API는 키패드(6장)만 | 요구사항 Q-16이 정해지면 6장에 방식별 모양 추가(지영·수연) |
-| 관리자 통계 | 8차 회의: 이용률·실사용률(노쇼)·평균 이용 시간·시간대별. 지금은 WEB/AGENT 건수(`/stats`)만 | 11/9 점검 전 명세 먼저(지영 제안) |
+| 관리자 통계·경고 목록·증거 사진 | core #74~#76 PR 대기 (5장 "관리자 화면용 API") | 머지되면 0장 상태 ✅로, 응답 예시 추가 |
