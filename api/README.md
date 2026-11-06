@@ -1,6 +1,6 @@
 # API 명세
 
-> 기준: 2026-11-03 18:50 코드. core `develop`(d9724f7: 로그인 #37, 노쇼·자동 퇴실 #40, 지금 바로 쓰기 #42 포함), WEB/AGENT 구분·건수는 core PR #45 브랜치 `feat/agent-created-via`, 비서는 assistant `feat/39-access-code-card` 브랜치.
+> 기준: 2026-11-06 core `develop`(d9fc2a0, 친구 #68까지). 알림 읽음은 core PR #69. 비서는 assistant 브랜치 기준.
 > 근거 요구사항: [요구사항 명세 7.2](../requirements/requirements.md#72-기능-요구사항-목록).
 > 컨벤션에 적힌 springdoc 자동 문서(`/swagger-ui`)가 붙기 전까지는 이 문서가 기준이에요. 코드를 바꾸면 이 문서도 같은 PR에서 고쳐 주세요.
 
@@ -15,20 +15,28 @@
 | nginx | `GET /api/auth/check` | 비서로 넘기기 전 토큰 확인 | FR-AUTH-002 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms` | 방 목록 | FR-ROOM-001 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms/availability?date=` | 하루 30분 칸별 빈방 | FR-WEB-004 | ✅ develop |
-| 화면 · 비서 | `GET /api/rooms/status` | 방 현황 (지금 비었는지, 다음 예약, 센서 재실) | FR-DEV-102 | PR 대기 (core #62) |
-| 화면 · 비서 | `GET /api/members?studentId=` | 참여자 학번 검색 | FR-RSV-004 | ✅ develop |
+| 화면 · 비서 | `GET /api/rooms/status` | 방 현황 (지금 비었는지, 다음 예약, 센서 재실) | FR-DEV-102 | ✅ develop |
+| 화면 · 비서 | `GET /api/members?studentId=` | 학번 검색 (친구 요청 전에 이름 확인) | FR-RSV-004 | ✅ develop |
+| 화면 | `GET /api/friends` | 친구 창: 친구·받은 요청·보낸 요청 | FR-RSV-004 | ✅ develop |
+| 화면 | `POST /api/friends/requests` | 학번으로 친구 요청 | FR-RSV-004 | ✅ develop |
+| 화면 | `POST /api/friends/requests/{id}/accept`·`decline`·`cancel` | 수락·거절(받은 사람), 취소(보낸 사람) | FR-RSV-004 | ✅ develop |
+| 화면 | `DELETE /api/friends/{studentId}` | 친구 삭제 | FR-RSV-004 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations` | 예약 만들기 | FR-RSV-001~005 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/instant` | 지금 바로 쓰기 (누른 시각부터) | FR-RSV-103 | ✅ develop |
 | 화면 · 비서 | `GET /api/reservations/me` | 내 예약 | FR-RSV-006 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/cancel` | 시작 전 취소 | FR-RSV-007 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/checkout` | 퇴실 | FR-RSV-008 | ✅ develop |
-| 화면 · 비서 | `POST /api/reservations/{id}/continue` | 연장하기 (사용 중 이어 쓰기, 1회) | FR-RSV-105 | PR 대기 (core #51) |
-| 화면 | `POST /api/reservations/{id}/still-here` | 아직 있어요 (자리 비움 타이머 다시, 예약당 1번) | FR-DEV-103 | PR 대기 (core #63) |
-| 관리자 | `GET /api/reservations/stats` | WEB/AGENT 예약 건수 | NFR-COM-008 | PR 대기 (core #45) |
-| 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | PR 대기 (core #52) |
+| 화면 · 비서 | `POST /api/reservations/{id}/continue` | 연장하기 (사용 중 이어 쓰기, 1회) | FR-RSV-105 | ✅ develop |
+| 화면 | `POST /api/reservations/{id}/still-here` | 아직 있어요 (자리 비움 타이머 다시, 예약당 1번) | FR-DEV-103 | ✅ develop |
+| 관리자 | `GET /api/reservations/stats` | WEB/AGENT 예약 건수 | NFR-COM-008 | ✅ develop |
+| 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | ✅ develop |
+| 화면 | `GET /api/notifications/me` | 내 알림함 (최근 50개, 읽음 여부) | FR-NTF-103 | ✅ develop |
+| 화면 | `GET /api/notifications/me/unread-count` | 안 읽은 알림 개수 (종 아이콘 점) | FR-NTF-103 | PR 대기 (core #69) |
+| 화면 | `POST /api/notifications/{id}/read` | 알림 하나 읽음 | FR-NTF-103 | PR 대기 (core #69) |
+| 화면 | `POST /api/notifications/read-all` | 내 알림 모두 읽음 | FR-NTF-103 | PR 대기 (core #69) |
 | 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
-| 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | PR 대기 (core #60) |
-| 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ❌ 아직 없음 |
+| 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | ✅ develop |
+| 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT | 브랜치 (assistant) |
 | 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT | 브랜치 (assistant) |
 | 화면 | `POST /api/agent/confirmations/{token}` | 확인 카드 [확인] | FR-AGT | 브랜치 (assistant) |
@@ -144,12 +152,45 @@
 ### `GET /api/members?studentId=20230002` 참여자 학번 검색 — 로그인 필요
 
 ```json
-{ "studentId": "20230002", "name": "홍*동" }
+{ "studentId": "20230002", "name": "홍*동", "me": false }
 ```
+
+`me`는 찾은 사람이 나(로그인한 대표자)면 `true`예요. 대표자는 이미 들어 있으니 화면은 **추가** 버튼 대신 "추가됨"을 보여 줘요. 그래도 대표자 학번을 `participantStudentIds`에 넣으면 예약 만들기가 `400 PARTICIPANT_DUPLICATE`로 막아요.
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
 | `MEMBER_NOT_FOUND` | 404 | 없는 학번 또는 학생 인증 전 (둘을 구별해 알려 주지 않아요) |
+
+### 친구 — 모두 로그인 필요 (FR-RSV-004, 11/6)
+
+참여자는 **서로 수락한 친구**만 넣을 수 있어요. 이름은 친구끼리도 가린 이름(김*영)이에요.
+
+`GET /api/friends` 친구 창
+```json
+{
+  "friends":  [{ "studentId": "20230002", "name": "홍*동", "since": "2026-11-06T10:20:00+09:00" }],
+  "received": [{ "requestId": 7, "studentId": "20230003", "name": "박*연", "requestedAt": "2026-11-06T10:21:00+09:00" }],
+  "sent":     []
+}
+```
+
+`POST /api/friends/requests` `{ "studentId": "20230002" }`
+→ `201` `{ "requestId": 7, "studentId": "20230002", "name": "홍*동", "status": "PENDING" }`
+상대가 이미 나에게 요청을 보내 뒀으면 바로 친구가 되어 `200`, `"status": "ACCEPTED"`.
+
+`POST /api/friends/requests/{requestId}/accept` (받은 사람) → `200` `{ "studentId", "name", "since" }`
+`POST /api/friends/requests/{requestId}/decline` (받은 사람) → `204`. 상대는 다시 보낼 수 있어요
+`POST /api/friends/requests/{requestId}/cancel` (보낸 사람) → `204`
+`DELETE /api/friends/{studentId}` → `204`. 양쪽에서 빠지고, 이미 잡은 예약의 참여자는 그대로예요
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `FRIEND_SELF` | 400 | 나에게 요청 |
+| `MEMBER_NOT_FOUND` | 404 | 없는 학번 또는 학생 인증 전 |
+| `FRIEND_ALREADY` | 409 | 이미 친구 |
+| `FRIEND_REQUEST_ALREADY_SENT` | 409 | 이미 요청을 보냄 (수락 대기 중) |
+| `FRIEND_REQUEST_NOT_FOUND` | 404 | 내가 받은(취소는 보낸) 대기 중 요청이 아님. 두 번 누른 경우도 |
+| `FRIEND_NOT_FOUND` | 404 | 친구가 아닌 학번을 삭제 |
 
 ## 5. 예약 — 모두 로그인 필요
 
@@ -186,9 +227,10 @@
 | `HEADCOUNT_OUT_OF_RANGE` | 400 | 방 인원(대표자 포함) 범위 밖 |
 | `USER_SUSPENDED` | 403 | 내가 노쇼 2번으로 이용 정지 중 (메시지에 끝나는 날짜, FR-RSV-106) |
 | `PARTICIPANT_SUSPENDED` | 403 | 참여자 중 이용 정지 중인 사람이 있음 (누구인지는 안 알려 줌) |
+| `PARTICIPANT_NOT_FRIEND` | 403 | 참여자 중 대표자와 친구가 아닌 사람이 있음 (누구인지는 안 알려 줌, 11/6) |
 | `RESERVATION_TIME_TAKEN` | 409 | 그 방 그 시간에 이미 예약 |
 | `OWNER_HAS_ACTIVE_RESERVATION` | 409 | 내가 대표자나 참여자로 들어간 끝나지 않은 예약이 이미 있음 (FR-RSV-003, 11/5) |
-| `PARTICIPANT_HAS_ACTIVE_RESERVATION` | 409 | 참여자 중 끝나지 않은 예약이 이미 있는 사람이 있음 (누구인지는 안 알려 줌, core 구현 예정) |
+| `PARTICIPANT_HAS_ACTIVE_RESERVATION` | 409 | 참여자 중 끝나지 않은 예약이 이미 있는 사람이 있음 (누구인지는 안 알려 줌, core #64) |
 | `PARTICIPANT_TIME_TAKEN` | 409 | 참여자가 같은 시간 다른 방 예약 중 |
 | `IDEMPOTENCY_KEY_REUSED` | 409 | 같은 키를 다른 내용에 씀 |
 | `RESERVATION_BUSY` | 503 | 동시 요청이 몰림 (드묾). 잠시 후 다시 |
@@ -258,11 +300,32 @@
 | `RESERVATION_NOT_IN_USE` | 409 | 사용 중이 아님 |
 | `STILL_HERE_ALREADY_USED` | 409 | 이 예약에서 이미 씀 |
 
-### `POST /api/reservations/{id}/continue` 연장하기 — 아직 없음 (core 구현 예정)
+### `POST /api/reservations/{id}/photos` 입실·퇴실 사진 올리기
+
+`multipart/form-data`로 `kind`(`CHECK_IN` 또는 `CHECK_OUT`)와 `file`(사진 1장)을 보내요 → `201 {"reservationId": 12, "kind": "CHECK_IN", "uploadedAt": "...+09:00", "sizeBytes": 812345}`. 선택 기능이라 안 올려도 입실·퇴실은 그대로 돼요(FR-RPT-102).
+
+- 그 예약의 대표자·참여자 누구나. 종류별 1장(먼저 올린 사진)
+- 입실 사진: 사용 중(`IN_USE`)일 때. 퇴실 사진: 사용 중이거나 퇴실한 뒤 30분 안
+- JPEG·PNG만, 최대 2MB. 화면에서 줄여서 보내 주세요(nginx 본문 크기 제한도 2MB보다 커야 해요)
+- 올린 지 30일 지나면 지워져요
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `RESERVATION_NOT_FOUND` | 404 | 없거나 내가 들어간 예약이 아님 |
+| `PHOTO_INVALID` | 400 | `kind`가 틀리거나, 파일이 없거나 JPEG·PNG가 아님 |
+| `PHOTO_TOO_LARGE` | 400 | 2MB 넘음 |
+| `PHOTO_NOT_ALLOWED_NOW` | 409 | 입실 사진인데 사용 중이 아님, 퇴실 사진인데 사용 전이거나 퇴실 30분 지남 |
+| `PHOTO_ALREADY_UPLOADED` | 409 | 그 종류 사진이 이미 있음 |
+
+### `GET /api/reservations/{id}/photos/{kind}` 사진 보기
+
+사진 파일 그대로(`image/jpeg`·`image/png`). 그 예약의 대표자·참여자와 관리자만. 없거나 볼 수 없으면 `404 PHOTO_NOT_FOUND`. 신고 판정 화면(FR-WEB-101)은 "앞 예약의 `CHECK_OUT`"과 "신고자 예약의 `CHECK_IN`"을 이 주소로 불러요.
+
+### `POST /api/reservations/{id}/continue` 연장하기
 
 형식은 [요구사항 FR-RSV-105](../requirements/requirements.md#72-기능-요구사항-목록) 그대로 만들어요. 1회를 넘기면 `409 RESERVATION_EXTENSION_LIMIT`(11/3 지영 확정). 구현되면 이 절을 채워요.
 
-### `GET /api/reservations/stats?from=2026-11-01&to=2026-11-30` 예약 건수 — 관리자만, PR 대기 (core #45)
+### `GET /api/reservations/stats?from=2026-11-01&to=2026-11-30` 예약 건수 — 관리자만
 
 예약을 **만든 날**(서울 날짜, 양 끝 포함) 기준으로 WEB/AGENT를 따로 세요. 노쇼·취소된 예약도 만든 건수에 들어가요. `from`·`to`를 빼면 처음부터·지금까지 전부이고, 응답의 `from`·`to`도 `null`이에요. 숫자만 나오고 누가·어느 방인지는 안 나와요.
 
@@ -279,7 +342,7 @@
 
 관리자 지정은 아직 화면이 없어 SQL로 해요: `UPDATE users SET role = 'ADMIN' WHERE email = '...'` (core V6).
 
-### `POST /api/reports` 신고 — PR 대기 (core #52)
+### `POST /api/reports` 신고
 
 "방에 문제가 있나요?" 버튼 뒤의 신고(FR-RPT-101). 지금 **사용 중(`IN_USE`)인 예약의 대표자나 참여자**만 보낼 수 있고, 그 방이거나 **옆 방**일 때만 돼요. 옆 방은 번호가 이웃한 방(1–2, 2–3, 3–4, 4–5, 요구사항 Q-05)이에요.
 
@@ -301,6 +364,22 @@
 | `INVALID_REQUEST` | 400 | `roomId`·`category` 빠짐, 없는 종류, 메모 500자 넘음 |
 | `REPORT_NOISE_NOT_CONFIRMED` | 400 | 소음인데 `noiseConfirmed`가 `true`가 아님 |
 | `REPORT_NOT_ALLOWED` | 403 | 지금 그 방이나 옆 방을 사용 중인 예약자가 아님 (입실 전·퇴실 후 포함) |
+
+## 5-2. 알림함 — 모두 로그인 필요 (FR-NTF-103)
+
+`GET /api/notifications/me` 최근 50개, 최근 순
+```json
+[{ "id": 3, "reservationId": 12, "kind": "END_SOON", "title": "종료 10분 전입니다",
+   "body": "창작실 1 11:30에 끝나요. ...", "createdAt": "2026-11-06T11:20:00+09:00", "read": false }]
+```
+
+`GET /api/notifications/me/unread-count` 종 아이콘 점 → `200 { "count": 3 }`
+
+`POST /api/notifications/{id}/read` 알림 하나 읽음 → `204`
+- 이미 읽었어도 `204` (처음 읽은 시각이 남아요)
+- 없거나 남의 알림이면 `404 NOTIFICATION_NOT_FOUND` (남의 알림이 있는지도 안 알려 줘요)
+
+`POST /api/notifications/read-all` 모두 읽음 → `200 { "count": 2 }` (이번에 읽음으로 바뀐 개수)
 
 ## 6. 출입 (키패드)
 
@@ -331,7 +410,7 @@
 
 ## 6-2. 재실 · CO2 센서
 
-### `POST /api/sensor-events` — 장치 토큰 필요, core #60 리뷰 중
+### `POST /api/sensor-events` — 장치 토큰 필요
 
 방마다 붙은 장치(ESP32, 시험용은 젯슨+우노)가 "지금 어떤지"만 알려요. 10·15분 자리 비움(FR-DEV-103), 환기 알림(FR-DEV-104), 방 현황(FR-DEV-102) 판단은 모두 core가 해요. 형식은 11/5 지영·수연이 맞췄어요. 장치 쪽 자세한 설명은 mspace-device `docs/sensor-events-api.md`.
 

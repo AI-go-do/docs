@@ -147,7 +147,7 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
 |---|---|---|---|
 | 노쇼 · 자동 퇴실 | 요구사항은 v0.2인데 core에 이미 있고 켜져 있음 | 그림에 "v0.2, 이미 있음"으로 표시. 시연 전 동작 확인 | — |
 | 비서 경로 | 지금 서버 입구(nginx 컨테이너)는 `/api/`를 전부 core로 보냄 | 게이트웨이(mspace-gateway #1 · infra #9)가 머지되면 `/api/agent/` → agent 길이 생김 | 재웅 |
-| 비서 채팅 · MCP 연결 | agent 채팅 API와 확인 카드(`/api/agent/confirmations/{token}` → MCP `/api/confirmations/{token}`)는 브랜치(#33)에만 | 머지되면 그림의 점선을 실선으로 | 비서 담당 |
+| 비서 채팅 · MCP 연결 | agent 채팅 API와 확인 카드(`/api/agent/confirmations/{token}` → MCP `/api/confirmations/{token}`)는 develop에 머지됨(assistant #33·#41, 11/5) | 그림의 점선을 실선으로 | 비서 담당 |
 | 비서가 넘기는 헤더 | MCP 서버가 `Authorization`과 함께 `X-User-Id`도 넘김. core는 `MSPACE_DEV_HEADER=true`일 때만 `X-User-Id`를 받음 | 운영에서는 `Authorization`만 넘기기 | 비서 담당 |
 | 모델 | develop에는 Gemini 어댑터만. Ollama는 브랜치(#34) | 머지 뒤 그림 갱신 | 비서 담당 |
 | 채팅 원문 | 모델로 그대로 감 | 학번 같은 숫자 가리기 | 비서 담당 |
@@ -155,7 +155,7 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
 | 중계 `gateway.py` | 기본 주소 `http://localhost:8080`, 실행 예시도 `:8080` | 맥은 `http://localhost:8411`, 서버는 `https://dev-mspace.java21.net` | 디바이스 담당 |
 | 키패드 잠금 | 틀린 횟수가 줄어들지 않음(잠금 풀린 뒤에도 쌓임) | 시연 전 `keypad_lock` 초기화, 이후 core에서 고치기 | core 담당 |
 | refresh 토큰 쿠키 | core #48 · web #4가 짝, 둘 다 미머지 | core 먼저, 그다음 web #4 | core · web |
-| 비서 채널 | 1차 회의는 텔레그램, 비서 설계는 웹 채팅 + 확인 카드 | 시연할 채널 하나 정하기 | 팀 |
+| 비서 채널 | **결정(11/5 재웅): v0.3은 앱 비서 탭(웹 채팅 + 확인 카드)만.** 텔레그램은 카드 방식을 정한 뒤 | — | 팀 |
 
 ## 고치는 규칙
 
