@@ -30,6 +30,8 @@
 | 화면 | `POST /api/reservations/{id}/still-here` | 아직 있어요 (자리 비움 타이머 다시, 예약당 1번) | FR-DEV-103 | ✅ develop |
 | 관리자 | `GET /api/reservations/stats` | WEB/AGENT 예약 건수 | NFR-COM-008 | ✅ develop |
 | 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | ✅ develop |
+| 관리자 | `GET /api/reports?verdict=OPEN` | 신고 목록 | FR-RPT-103 | ✅ develop |
+| 관리자 | `POST /api/reports/{id}/judge` | 신고 판정 (판정 뒤 경고·정지·알림은 core #70 PR 대기) | FR-RPT-103·104 | ✅ develop |
 | 화면 | `GET /api/notifications/me` | 내 알림함 (최근 50개, 읽음 여부) | FR-NTF-103 | ✅ develop |
 | 화면 | `GET /api/notifications/me/unread-count` | 안 읽은 알림 개수 (종 아이콘 점) | FR-NTF-103 | PR 대기 (core #69) |
 | 화면 | `POST /api/notifications/{id}/read` | 알림 하나 읽음 | FR-NTF-103 | PR 대기 (core #69) |
@@ -229,7 +231,7 @@
 | `PARTICIPANT_DUPLICATE` | 400 | 같은 학번 두 번 |
 | `PARTICIPANT_NOT_FOUND` | 400 | 학생 인증 안 한 학번 |
 | `HEADCOUNT_OUT_OF_RANGE` | 400 | 방 인원(대표자 포함) 범위 밖 |
-| `USER_SUSPENDED` | 403 | 내가 노쇼 2번으로 이용 정지 중 (메시지에 끝나는 날짜, FR-RSV-106) |
+| `USER_SUSPENDED` | 403 | 내가 이용 정지 중: 노쇼 2번(FR-RSV-106) 또는 경고 3번(FR-RPT-104, core #70). 메시지에 끝나는 날짜 |
 | `PARTICIPANT_SUSPENDED` | 403 | 참여자 중 이용 정지 중인 사람이 있음 (누구인지는 안 알려 줌) |
 | `PARTICIPANT_NOT_FRIEND` | 403 | 참여자 중 대표자와 친구가 아닌 사람이 있음 (누구인지는 안 알려 줌, 11/6) |
 | `RESERVATION_TIME_TAKEN` | 409 | 그 방 그 시간에 이미 예약 |
@@ -361,13 +363,49 @@
 - `category`: `BROKEN`(비품 고장) · `WINDOW_OPEN`(창문 열림) · `MESSY`(어질러짐) · `NOISE`(소음)
 - `noiseConfirmed`: "정말 소란인가요?" 체크. 소음일 때만 필수
 - `content`: 메모, 선택, 500자까지
-- `verdict`는 관리자 판정(FR-RPT-103) 전까지 `OPEN`이에요. 사진·결과 알림·판정 API는 아직 없어요
+- `verdict`는 관리자 판정(FR-RPT-103) 전까지 `OPEN`이에요
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
 | `INVALID_REQUEST` | 400 | `roomId`·`category` 빠짐, 없는 종류, 메모 500자 넘음 |
 | `REPORT_NOISE_NOT_CONFIRMED` | 400 | 소음인데 `noiseConfirmed`가 `true`가 아님 |
 | `REPORT_NOT_ALLOWED` | 403 | 지금 그 방이나 옆 방을 사용 중인 예약자가 아님 (입실 전·퇴실 후 포함) |
+| `REPORT_SUSPENDED` | 403 | 허위 신고 경고가 쌓여 신고 정지 중 (메시지에 끝나는 날짜, FR-RPT-103, core #70) |
+
+### `GET /api/reports?verdict=OPEN` 신고 목록 — 관리자만
+
+최근 신고가 위. `verdict`를 빼면 전부. 관리자가 아니면 `403 ADMIN_ONLY`.
+```json
+[{ "id": 7, "roomId": 2, "category": "MESSY", "content": null, "verdict": "OPEN",
+   "reporterReservationId": 12, "createdAt": "2026-11-12T14:20:05+09:00", "judgedAt": null }]
+```
+
+### `POST /api/reports/{id}/judge` 판정 — 관리자만
+
+```json
+{ "verdict": "CONFIRMED" }
+```
+→ `200` 판정이 반영된 신고(목록과 같은 모양). 대기(`OPEN`)인 신고에 한 번만.
+
+| 판정 | 신고자 | 그 방 직전 이용 예약의 대표자 |
+|---|---|---|
+| 사실 `CONFIRMED` | 고맙다는 알림 | 경고 1회 + 알림 `WARNING` |
+| 확인 불가 `UNVERIFIED` | 처리하지 않았다는 알림, 벌칙 없음 | 없음 |
+| 허위 `FALSE` | 경고 1회 + 알림 | 없음 |
+
+- 신고자 알림 종류는 `REPORT_RESULT`. 알림함(5-2)에 보여요
+- 직전 이용 예약: 같은 방, 신고자 예약 제외, 신고 전에 입실한 예약 중 가장 최근. 노쇼(입실 안 함)는 빼요. 찾지 못하면 경고 없음
+- 30일 안에 경고 3회면 14일 정지. 사용 위반은 예약·연장 정지(`403 USER_SUSPENDED`), 허위 신고는 신고만 정지(`403 REPORT_SUSPENDED`). 두 경고는 따로 세요
+- 판정·경고·정지·알림은 한 번에 저장돼요. 하나라도 실패하면 판정도 안 돼요
+- 판정 뒤 벌칙은 core #70 PR 대기. 머지 전 develop은 판정만 해요
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | `verdict`가 없거나 `CONFIRMED`·`UNVERIFIED`·`FALSE`가 아님 |
+| `ADMIN_ONLY` | 403 | 관리자가 아님 |
+| `REPORT_NOT_FOUND` | 404 | 없는 신고 |
+| `REPORT_NOT_JUDGEABLE` | 409 | 소음 신고 (판정 대상 아님) |
+| `REPORT_ALREADY_JUDGED` | 409 | 이미 판정함 |
 
 ## 5-2. 알림함 — 모두 로그인 필요 (FR-NTF-103)
 
