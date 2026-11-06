@@ -616,23 +616,27 @@ CO2:
 | `reservationId` | 정수 | `current`의 `lastEnded.reservationId` |
 | `deviceId` | 글자 50자 이하 | 보낸 장치(`camera-방번호`) |
 | `result` | `CLEAN` · `NEEDS_CLEANING` | 깨끗함 / 치울 것이 있음(컵·쓰레기 등). 두고 간 물건만 있으면 `CLEAN` + `leftItems`로 보내요(결과 값을 따로 두지 않아요) |
-| `items` | 글자 배열, 0~20개, 각 50자 이하 | 본 물건 이름 전부(모델이 내는 이름 그대로). 관리자 판정 때 근거로 보여 줘요 |
+| `items` | **필수**, 글자 배열 0~20개(빈 배열 가능), 각 1~50자 | 본 물건 이름 전부(모델이 내는 이름 그대로). 관리자 판정 때 근거로 보여 줘요 |
 | `leftItems` | `BAG` · `PHONE` · `EARBUDS` · `LAPTOP` 배열, 0~4개 | 두고 간 귀중품. 이 넷만 알림을 보내요(11/6 지영, 노트북은 수연 의견으로 추가) |
-| `observedAt` | 시각 `+09:00` | 확인한 시각 |
+| `observedAt` | 시각, 오프셋 필수(`+09:00` 권장, `Z`도 받음) | 확인한 시각. 오프셋이 없으면 400 |
 
 **core가 하는 일**
 - `NEEDS_CLEANING` → 그 방에 **어질러짐(`MESSY`) 신고를 자동으로 하나 만들어요**(신고자 없음, `source: CAMERA`, 내용에 `items`). 관리자가 판정하는 흐름은 사람 신고와 같고(`POST /api/reports/{id}/judge`), 사실(`CONFIRMED`)이면 **이 예약의 대표자**에게 경고가 가요(FR-RPT-104 규칙 그대로, 30일 3번 → 14일 정지). 허위(`FALSE`)여도 신고자가 없으니 경고는 없어요. 응답 `reportId`가 그 신고 번호(`CLEAN`이면 `null`).
-- `leftItems`가 있으면 → 그 예약의 대표자·참여자 모두에게 알림 `LEFT_ITEM` "2번 방에 가방을 두고 가셨어요". 벌칙 없음.
+- `leftItems`가 있으면 → 그 예약의 대표자·참여자 모두에게 알림 `LEFT_ITEM`(제목 "두고 간 물건이 있어요", 내용 "2번 방에 가방을(를) 두고 가신 것 같아요. 다시 들러 확인해 주세요."). 벌칙 없음.
 - 카메라 결과만으로 바로 경고하지 않아요. 사진을 안 남겨서 잘못 봤을 때(방 원래 컵, 그림자) 학생이 반박할 증거가 없기 때문에 관리자가 한 번 걸러요(11/6 지영).
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
 | `INVALID_REQUEST` | 400 | 형식이 틀림 |
+| `ROOM_NOT_FOUND` | 404 | 없는 방 |
 | `RESERVATION_NOT_FOUND` | 404 | 이 방의 예약이 아님 |
 | `RESERVATION_NOT_ENDED` | 409 | 아직 안 끝난 예약이거나 입실 안 한 예약 |
-| `TIDY_CHECK_EXISTS` | 409 | 다른 `eventId`로 이미 결과가 있음 |
+| `TIDY_CHECK_NOT_LATEST` | 409 | 이 방에서 **가장 최근에 끝난 예약**(`lastEnded`)이 아님. 장치 토큰이 공용이라 지난 예약에 신고를 만들지 못하게 막아요 |
+| `TIDY_CHECK_EXISTS` | 409 | 이 예약에 다른 `eventId`로 이미 결과가 있거나, 같은 `eventId`를 다른 예약에 씀 |
 
-### `GET /api/tidy-checks?days=7` 정리 확인 목록 — 관리자만
+- API 게이트웨이: 장치 토큰은 JWT가 아니라서 `/api/rooms/{roomId}/current`, `/api/rooms/{roomId}/tidy-checks`도 `/api/sensor-events`처럼 공개 경로로 넣어야 해요. 장치 토큰은 core가 확인해요 (재웅)
+
+### `GET /api/tidy-checks?days=7` 정리 확인 목록 — 관리자만 (⏳ 다음 PR, core #81 다음)
 
 최근 N일(1~92, 기본 7) 결과를 최근 순으로 줘요. 관리자가 아니면 `403 ADMIN_ONLY`.
 
@@ -643,8 +647,8 @@ CO2:
                "reportId": 12, "observedAt": "2026-11-09T14:53:00+09:00" } ] }
 ```
 
-- 신고 목록(`GET /api/reports`)에 자동 신고는 `source: "CAMERA"`, 사람 신고는 `source: "USER"`로 나와요.
-- 신고 증거(`GET /api/reports/{id}/evidence`, core #76)의 앞 예약 칸에도 같은 결과를 `tidyCheck`로 붙여요(없으면 `null`). 사람이 어질러짐을 신고하면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
+- 신고 목록(`GET /api/reports`)에 자동 신고는 `source: "CAMERA"`, 사람 신고는 `source: "USER"`로 나와요(core #81). 카메라 신고는 신고자가 없어서 `reporterReservationId`가 `null`이에요.
+- ⏳ 다음 PR: 신고 증거(`GET /api/reports/{id}/evidence`, core #76)의 앞 예약 칸에도 같은 결과를 `tidyCheck`로 붙여요(없으면 `null`). 사람이 어질러짐을 신고하면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
 
 ## 7. 비서 (`/api/agent`) — 로그인 필요, assistant `develop`
 
