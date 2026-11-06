@@ -573,6 +573,70 @@ CO2:
 - 장치 토큰: 지금 core는 키패드와 같은 토큰 하나뿐이에요. 센서용 토큰을 장치마다 따로 두고 토큰에 방·장치를 묶을지(다르면 `403 DEVICE_ROOM_MISMATCH`) 정하기 (지영·재웅)
 - API 게이트웨이: 장치 토큰은 JWT가 아니라서 `/api/sensor-events`를 `/api/access/verify`처럼 공개 경로로 넣기 (재웅)
 
+## 6-3. 퇴실 뒤 정리 확인 (방 카메라, FR-DEV-105)
+
+방 안 카메라(젯슨)가 **예약이 실제로 끝났을 때만** 남은 물건을 봐요. "방이 30초 비면" 기준은 다 같이 화장실만 가도 걸려서 쓰지 않아요(11/6 지영·수연).
+**사진은 저장하지 않아요.** 젯슨은 1초에 한 번 화면에서 사람 수와 물건 이름만 뽑고 화면을 바로 버려요. core로는 글자만 가요. 개발용 미리보기는 기본 꺼짐, 켜도 팀 Tailscale 안에서만 열리고 저장하지 않아요.
+
+### `GET /api/rooms/{roomId}/current` 지금 예약·방금 끝난 예약 — 장치 토큰 필요
+
+젯슨이 **10초마다** 불러요. `lastEnded.reservationId`가 바뀌면 그 예약이 방금 끝난 것이라 정리 확인을 시작해요. 시간 종료·직접 퇴실·자리 비움 퇴실이 모두 잡히고, 다음 예약이 바로 입실해도 놓치지 않아요.
+
+```json
+200
+{ "roomId": 2,
+  "current": { "reservationId": 41, "status": "IN_USE",
+               "startAt": "2026-11-09T15:00:00+09:00", "endAt": "2026-11-09T17:00:00+09:00" },
+  "lastEnded": { "reservationId": 40, "status": "CHECKED_OUT", "endedAt": "2026-11-09T14:52:10+09:00" } }
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `current` | 지금 시간에 걸린 예약(`BOOKED` 입실 전 또는 `IN_USE`). 없으면 `null` |
+| `lastEnded` | 이 방에서 가장 최근에 끝난 예약. `status`는 `CHECKED_OUT`(직접 퇴실·강제 퇴실) `AUTO_CHECKED_OUT`(시간 종료) `AWAY_RELEASED`(자리 비움). 입실 안 한 예약(`NO_SHOW`·`CANCELED`)은 방에 아무도 없었으니 넣지 않아요. 없으면 `null` |
+| `endedAt` | 실제로 나간 시각(`checked_out_at`) |
+
+- 예약자 이름·학번은 주지 않아요(장치에 필요 없음).
+- 오류: `401` 토큰 문제, `404 ROOM_NOT_FOUND`.
+
+### `POST /api/rooms/{roomId}/tidy-checks` 정리 확인 결과 — 장치 토큰 필요
+
+방에 **사람이 0명일 때 보인 물건 목록**으로 판단한 결과를 보내요. 예약 하나에 결과 하나예요.
+
+```json
+{ "eventId": "5b0e1c2a-…", "reservationId": 40, "deviceId": "camera-2",
+  "result": "LEFT_ITEM", "items": ["cup", "backpack"], "observedAt": "2026-11-09T14:53:00+09:00" }
+→ 200 { "result": "STORED" } 또는 { "result": "DUPLICATE" }
+```
+
+| 필드 | 형식 | 뜻 |
+|---|---|---|
+| `eventId` | 글자 1~64자 | 센서와 같아요. 같은 값을 다시 보내면 `DUPLICATE`로 한 번만 저장 |
+| `reservationId` | 정수 | `current`의 `lastEnded.reservationId` |
+| `deviceId` | 글자 50자 이하 | 보낸 장치(`camera-방번호`) |
+| `result` | `CLEAN` · `NEEDS_CLEANING` · `LEFT_ITEM` | 깨끗함 / 치울 것(컵·쓰레기) / 두고 간 물건(가방·휴대폰 등). 둘 다면 `LEFT_ITEM` |
+| `items` | 글자 배열, 0~20개, 각 50자 이하 | 본 물건 이름(모델이 내는 이름 그대로, 예: `cup` `bottle` `backpack`) |
+| `observedAt` | 시각 `+09:00` | 확인한 시각 |
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | 형식이 틀림 |
+| `RESERVATION_NOT_FOUND` | 404 | 이 방의 예약이 아님 |
+| `RESERVATION_NOT_ENDED` | 409 | 아직 안 끝난 예약이거나 입실 안 한 예약 |
+| `TIDY_CHECK_EXISTS` | 409 | 다른 `eventId`로 이미 결과가 있음 |
+
+### `GET /api/tidy-checks?days=7` 정리 확인 목록 — 관리자만
+
+최근 N일(1~92, 기본 7) 결과를 최근 순으로 줘요. 관리자 화면에서 "치울 것·두고 간 물건이 있는 방"을 볼 때 써요. 관리자가 아니면 `403 ADMIN_ONLY`.
+
+```json
+200
+{ "items": [ { "reservationId": 40, "roomId": 2, "roomName": "2번 방", "endedAt": "2026-11-09T14:52:10+09:00",
+               "result": "LEFT_ITEM", "items": ["cup", "backpack"], "observedAt": "2026-11-09T14:53:00+09:00" } ] }
+```
+
+- 신고 증거(`GET /api/reports/{id}/evidence`, core #76)의 앞 예약 칸에도 같은 결과를 `tidyCheck`로 붙여요(없으면 `null`). 어질러짐 신고가 들어오면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
+
 ## 7. 비서 (`/api/agent`) — 로그인 필요, assistant `develop`
 
 > 자세한 입출력·오류는 비서 저장소 [도구 명세](https://github.com/AI-go-do/mspace-assistant/blob/develop/docs/도구-명세.md)·[설계](https://github.com/AI-go-do/mspace-assistant/blob/develop/docs/설계.md)가 기준이에요. 여기는 화면이 부르는 모양만 요약해요.
