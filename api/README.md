@@ -615,7 +615,7 @@ CO2:
 | `eventId` | 글자 1~64자 | 센서와 같아요. 같은 값을 다시 보내면 `DUPLICATE`로 한 번만 처리 |
 | `reservationId` | 정수 | `current`의 `lastEnded.reservationId` |
 | `deviceId` | 글자 50자 이하 | 보낸 장치(`camera-방번호`) |
-| `result` | `CLEAN` · `NEEDS_CLEANING` | 깨끗함 / 치울 것이 있음(컵·쓰레기 등) |
+| `result` | `CLEAN` · `NEEDS_CLEANING` | 깨끗함 / 치울 것이 있음(컵·쓰레기 등). 두고 간 물건만 있으면 `CLEAN` + `leftItems`로 보내요(결과 값을 따로 두지 않아요) |
 | `items` | 글자 배열, 0~20개, 각 50자 이하 | 본 물건 이름 전부(모델이 내는 이름 그대로). 관리자 판정 때 근거로 보여 줘요 |
 | `leftItems` | `BAG` · `PHONE` · `EARBUDS` 배열, 0~3개 | 두고 간 귀중품. 이 셋만 알림을 보내요(11/6 지영) |
 | `observedAt` | 시각 `+09:00` | 확인한 시각 |
