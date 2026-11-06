@@ -102,8 +102,8 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
 
 | 상자 | 저장소 | 기술 | 하는 일 |
 |---|---|---|---|
-| 휴대폰 (PWA) · 화면 web | `mspace-web` | PWA | 로그인, 빈방, 예약, 내 예약, 6자리 번호, 비서 채팅 |
-| nginx | (학교 서버, compose 밖) | nginx (Nginx Proxy Manager) | 도메인(`mspace.java21.net`, `dev-mspace.java21.net`)을 우리 포트(8412, 8411)로 넘김. HTTPS |
+| 휴대폰 (PWA) · 화면 web | `mspace-web` | PWA | 로그인, 빈방(빈 방 누르면 지금 바로 쓰기), 예약(친구만 함께), 입실 번호·입실 QR, 사용 중 카드(퇴실·연장·아직 있어요), 사진, 신고, 알림함, 친구, 비서 채팅. 사진은 900KB 아래로 줄여 보냄 |
+| nginx | (학교 서버, compose 밖) | nginx (Nginx Proxy Manager) | 도메인(`mspace.java21.net`, `dev-mspace.java21.net`)을 우리 포트(8414 시연, 8413 개발)로 넘김. HTTPS. 업로드 한도 1MB |
 | API 게이트웨이 | `mspace-gateway` (compose는 `infra`) | Java 21 · Spring Cloud Gateway (WebFlux) | 밖에서 들어오는 유일한 문. JWT 확인, `/api/agent/**` → agent, `/api/**` → core, `/` → web, 로드밸런싱 |
 | mspace-core | `mspace-core` | Java 21 · Spring Boot 4 · 모듈러 모놀리스 | 예약 규칙, 로그인, 출입 번호 확인. 포트와 어댑터 구조 |
 | PostgreSQL | `infra` (compose) | PostgreSQL 16 · Flyway | 겹침 금지(EXCLUDE) 제약, 테이블 버전 관리. 밖으로 포트 안 열림 |

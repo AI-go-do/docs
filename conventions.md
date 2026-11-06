@@ -62,9 +62,9 @@ Refs #12
 | 본문 | 요구사항 ID(`FR-RSV-001`), 이슈(`Closes #12`), 한 일, 확인 방법, 화면이면 스크린샷 |
 | 크기 | 변경 400줄 안. 넘으면 나눈다 |
 | 마감 | 매일 15시까지 PR |
-| 리뷰 | 다른 팀원 1명 승인. 당일 안에 리뷰. CodeRabbit은 참고용 |
+| 리뷰 | 다른 팀원 1명 승인. 당일 안에 리뷰. `develop` PR은 마지막 커밋의 CodeRabbit 리뷰가 끝나고 해결 안 된 지적이 없어야 함 |
 | 합치기 | `develop`은 Squash merge 후 브랜치 삭제, `main`은 Merge commit |
-| 통과 조건 | 빌드·테스트 통과. `main`은 새 코드 커버리지 80% 이상 |
+| 통과 조건 | 빌드·테스트 통과. `main`(릴리스 PR)은 CodeRabbit이 건너뛰므로 CI만 보고, SonarQube 팀 게이트(새 코드 커버리지 80% 이상 · 중복 3% 이하 · 새 버그·취약점 0)를 통과해야 함 |
 
 **PR 본문 양식** (`.github/pull_request_template.md`)
 

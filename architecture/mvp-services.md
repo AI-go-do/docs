@@ -1,5 +1,7 @@
 # MVP (v0.1) 서비스별 구조 · API
 
+> ⚠️ **11/4 MVP 시점의 기록이에요.** 포트는 지금 8414(시연)·8413(개발)이고 게이트웨이·비서·Redis가 붙었어요. 지금 구조는 [아키텍처](README.md), 지금 API는 [API 명세](../api/README.md)를 보세요.
+>
 > 2026-11-04 기준 코드: core `develop` d9724f7 (Flyway V1~V5), device `main` 3d4d6b5, infra `main` 8aec2a8, web `develop` 2ef77db + 화면 PR 사슬(#4~#10), assistant `develop` b3de9b7.
 > 요청·응답 본문과 오류 코드 전체는 [API 명세](../api/README.md)에 있어요. 여기서는 **서비스마다 무엇을 열고(제공) 무엇을 부르는지(호출)** 만 봐요.
 > 표의 상태: ✅ develop/main에 있음 · 🔶 PR·브랜치에만 있음 · ❌ 코드 없음.
@@ -12,7 +14,7 @@
 
 | 서비스 | 저장소 | 실행 위치 | 여는 곳 |
 |---|---|---|---|
-| nginx | (학교 서버, 강사님 관리) | 학교 서버, Docker 밖 (Nginx Proxy Manager) | 443 → 8411·8412 |
+| nginx | (학교 서버, 강사님 관리) | 학교 서버, Docker 밖 (Nginx Proxy Manager) | 443 → 8413(개발)·8414(시연). 11/4엔 8411·8412 |
 | API 게이트웨이 `gateway` | `mspace-gateway` (compose는 `infra`) | compose 컨테이너 | `127.0.0.1:${PORT}:8000` (서버 안에서만 열린 유일한 포트, infra #8 · #9) |
 | web | `mspace-web` | compose 컨테이너 (nginx가 정적 파일) | 안쪽 `web:80` |
 | core | `mspace-core` | compose 컨테이너 | 안쪽 `core:8080` |
@@ -27,14 +29,14 @@
 
 ```mermaid
 flowchart LR
-    a["mspace.java21.net"] --> p2[":8412 시연 (main 이미지)"]
-    b["dev-mspace.java21.net"] --> p1[":8411 개발 (develop 이미지)"]
+    a["mspace.java21.net"] --> p2[":8414 시연 (main 이미지)"]
+    b["dev-mspace.java21.net"] --> p1[":8413 개발 (develop 이미지)"]
 ```
 
 | 받는 주소 | 보내는 곳 | 하는 일 |
 |---|---|---|
-| `https://mspace.java21.net` | 학교 서버 `:8412` | 시연용. HTTPS를 여기서 풀어요 |
-| `https://dev-mspace.java21.net` | 학교 서버 `:8411` | 개발용 |
+| `https://mspace.java21.net` | 학교 서버 `:8414` | 시연용. HTTPS를 여기서 풀어요 |
+| `https://dev-mspace.java21.net` | 학교 서버 `:8413` | 개발용 |
 
 - **제공 API: 없음.** 길만 넘겨요. 설정은 학교 Nginx Proxy Manager에서 해요.
 
@@ -170,7 +172,7 @@ flowchart LR
 | 입구 포트 뒷문 | 🔶 infra #8: `0.0.0.0` → `127.0.0.1`로 묶고 설정 폴더 연결 | CodeRabbit 리뷰 후 머지 | infra |
 | nginx 설정 반영 | 🔶 core #49 · web #11 · assistant #48: 배포 때 `nginx -s reload` | infra #8 다음에 머지 | core · web · assistant |
 | 인증 메일 | `MAIL_ENABLED` 기본 `false` (번호를 로그에만 찍음) | 서버 `.env`에 `MAIL_ENABLED=true`, Gmail 앱 비밀번호. 학교 서버에서 `nc -vz smtp.gmail.com 587` 확인 | infra |
-| 중계 `SERVER` 기본값 | `http://localhost:8080` (core를 맥에서 따로 켤 때만 맞음). compose는 core 포트를 밖으로 안 열어요 | 서버 쓸 때 `SERVER=https://dev-mspace.java21.net`, 맥 compose면 `http://localhost:8411` | device |
+| 중계 `SERVER` 기본값 | `http://localhost:8080` (core를 맥에서 따로 켤 때만 맞음). compose는 core 포트를 밖으로 안 열어요 | 서버 쓸 때 `SERVER=https://dev-mspace.java21.net`, 맥 compose면 `http://localhost:8413` | device |
 | 화면 | 로그인~배치도가 web PR #4~#10에 있음 | 순서대로 머지 | web |
 | refresh 토큰 쿠키 | core #48 · web #4가 짝. 둘 다 미머지 | core 먼저, 그다음 web #4 | core · web |
 | 키패드 잠금 횟수 | 틀린 횟수가 줄지 않음 | 시연 전 `UPDATE keypad_lock SET failed_count=0, locked_until=NULL;` | core |
