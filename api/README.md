@@ -408,6 +408,42 @@
 | `DEVICE_UNAUTHORIZED` | 401 | 장치 토큰이 없거나 틀림 |
 | `INVALID_REQUEST` | 400 | `eventId`·`roomId` 빠짐, 길이 넘음 |
 
+## 6-1. 이용 규칙
+
+### `GET /api/rules` 이용 규칙 — 토큰 필요 없음 (core #57)
+
+화면 "이용 규칙"(FR-WEB-003)과 비서 `usage_rules` 도구가 같은 내용을 받아요. 로그인 전에도 볼 수 있어요(수용 기준).
+- `reservation`의 숫자는 core가 실제 검사에 쓰는 설정값을 그대로 내보내요. 설정을 바꾸면 화면·비서 안내도 같이 바뀌어요.
+- `conduct`(이용 수칙)·`reminders`(한 줄 안내) 문구는 core 설정(`application.yml`의 `mspace.rules`)에 있어요. 원본은 [요구사항 3.1](../requirements/requirements.md).
+
+```json
+200
+{
+  "reservation": {
+    "bookingWindowDays": 7, "slotMinutes": 30, "maxMinutes": 120,
+    "checkinOpenBeforeMinutes": 10, "noShowMinutes": 15, "instantNoShowMinutes": 10,
+    "extension": { "maxCount": 1, "openBeforeMinutes": 10, "maxMinutes": 120, "chainGapMinutes": 30 }
+  },
+  "conduct": [
+    { "key": "FOOD", "title": "음식", "rule": "음식물 반입 금지예요. 먹을 것과 마실 것(음료 포함) 모두 가져올 수 없어요",
+      "penalty": "신고가 사실로 판정되면 경고. 기기·비품이 고장 나면 배상을 요구해요" }
+  ],
+  "reminders": { "checkin": "음식물은 반입 금지예요", "checkout": "자리 정리하셨나요?" }
+}
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `reservation.bookingWindowDays` | 오늘 포함 며칠 안에 시작하는 예약만 (7) |
+| `reservation.slotMinutes` · `maxMinutes` | 예약 단위 30분, 1회 최대 120분 |
+| `reservation.checkinOpenBeforeMinutes` | 시작 몇 분 전부터 입실 번호가 맞나 (10, FR-ACC-001) |
+| `reservation.noShowMinutes` · `instantNoShowMinutes` | 입실 기한: 미리 예약 15분, 지금 바로 쓰기 10분 |
+| `reservation.extension` | 연장하기(FR-RSV-105): 1회, 종료 10분 전부터, 최대 120분, 끝난 뒤 30분 안의 새 예약은 이어진 사용 |
+| `conduct[]` | 이용 수칙. `key`는 `NOISE` `FOOD` `TIDY` `NO_SHOW` `AWAY` `PHOTO` `DOOR` `BELONGINGS` (8개), `title`·`rule`·`penalty`는 화면에 그대로 보여 줄 문장 |
+| `reminders.checkin` · `checkout` | 체크인 직후, 퇴실 확인 창에 보여 줄 한 줄 |
+
+- 내 경고 횟수("내 경고 0회")는 이 응답에 없어요. 로그인한 사람마다 다른 값이라 신고 판정 쪽 API에서 따로 줘요(FR-RPT-104, 아직 없음).
+
 ## 6-2. 재실 · CO2 센서
 
 ### `POST /api/sensor-events` — 장치 토큰 필요
@@ -562,7 +598,7 @@ CO2:
 
 | 무엇 | 지금 | 할 일 |
 |---|---|---|
-| `GET /api/rules` | 요구사항에만 있고 코드 없음 | core에 추가 |
+| `GET /api/rules` | core #57로 develop에 머지 (6-1장) | 비서 `usage_rules` 도구가 이 응답을 쓰는지 확인(영준) |
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
 | 비서 API | 도구(MCP) 쪽 #26·#29, 에이전트 쪽 #31은 develop에 머지됨. #30·#33·#34·#40·#41은 리뷰 중 | 모두 머지되면 0장 상태 ✅로 |
 | `created_via` | core PR #45: `X-Created-Via: AGENT`면 AGENT로 저장 | #45 머지 뒤 비서(MCP)가 core 호출에 `X-Created-Via: AGENT`를 붙이기(영준) |

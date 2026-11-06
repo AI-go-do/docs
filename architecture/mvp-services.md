@@ -113,7 +113,7 @@ flowchart LR
 | `GET /actuator/health` | 없음 | — | `{status: UP}` | 인프라 | ✅ |
 | `POST /api/reservations/instant` | 학생 | `roomId`, `endAt`, `participantStudentIds` | `POST /api/reservations`와 같음 | v0.2 | ✅ (먼저 들어옴) |
 | `GET /api/auth/check` | 학생 | — | `204` / `401` | v0.3 비서용 | ✅ |
-| `GET /api/rules` | — | — | — | v0.1 요구사항 | ❌ 없음 |
+| `GET /api/rules` | 없음 | — | 예약 규칙 숫자·이용 수칙·한 줄 안내 ([API 명세 6-1](../api/README.md)) | v0.1 요구사항 | ✅ (core #57) |
 
 - 오류는 모두 `{"code", "message"}` 모양이에요. 코드 목록은 [API 명세](../api/README.md) 2~6장.
 - 시각은 서울 시간 `+09:00`. 오프셋 없이 보내면 `400`.
@@ -174,7 +174,7 @@ flowchart LR
 | 화면 | 로그인~배치도가 web PR #4~#10에 있음 | 순서대로 머지 | web |
 | refresh 토큰 쿠키 | core #48 · web #4가 짝. 둘 다 미머지 | core 먼저, 그다음 web #4 | core · web |
 | 키패드 잠금 횟수 | 틀린 횟수가 줄지 않음 | 시연 전 `UPDATE keypad_lock SET failed_count=0, locked_until=NULL;` | core |
-| `GET /api/rules` | 요구사항에만 있음. 화면은 자체 문구로 대신 | MVP는 화면 문구로 가고, core API는 다음 버전 | core |
+| `GET /api/rules` | ✅ core #57로 develop에 머지 | 화면 문구를 이 API로 바꾸기 | web |
 | 학교 서버 배포 | 강사님 안내 대기 (`DEPLOY_ENABLED` 꺼짐) | 그 전까지 맥 compose로 시험 | infra |
 
 ## 8. (참고, v0.3) AI 비서 · `mspace-assistant`
