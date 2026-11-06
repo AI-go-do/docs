@@ -1,6 +1,6 @@
 # 인프라 · CI/CD
 
-> 담당: 재웅 · 최종 수정 2026-10-31 · ✅ 확정
+> 담당: 재웅 · 최종 수정 2026-11-06 (지금 compose·워크플로에 맞춤) · ✅ 확정
 
 ## 1. 한눈에
 
@@ -12,14 +12,19 @@ flowchart LR
     merge --> img[이미지 빌드<br/>→ GHCR]
     img -->|SSH 배포| srv
 
-    subgraph srv[배포 서버 · docker compose]
-        gw[입구 프록시] --> front[front<br/>React]
+    subgraph srv[학교 서버 · docker compose]
+        gw[API 게이트웨이<br/>Spring Cloud Gateway] --> front[web<br/>React PWA]
         gw --> core[core<br/>Spring Boot]
+        gw --> agent[비서 agent]
+        agent --> mcp[MCP 서버]
+        mcp --> core
+        agent --> redis[(Redis)]
+        mcp --> redis
         core --> db[(PostgreSQL)]
     end
 
-    phone[학생 폰] --> gw
-    jetson[Jetson 보드 B<br/>센서 · 키패드 · Ollama] --> gw
+    phone[학생 폰] --> ngx[학교 nginx<br/>HTTPS] --> gw
+    dev2[키패드 중계 · 재실 센서] --> ngx
 ```
 
 ## 2. 기술 스택
@@ -35,7 +40,8 @@ flowchart LR
 | CI | GitHub Actions · Testcontainers · SonarQube(학교 Community 서버) · CodeRabbit | ✅ |
 | 컨테이너 | Docker · docker compose | ✅ |
 | 이미지 저장소 | GHCR (GitHub Container Registry) | ✅ |
-| 입구 프록시 | nginx (학교 nginx 뒤에 우리 nginx 한 겹) | ✅ |
+| 입구 | 학교 nginx(HTTPS) 뒤에 **API 게이트웨이**(`mspace-gateway`, Spring Cloud Gateway) 한 겹. 11-04 우리 nginx 컨테이너에서 바꿈 | ✅ |
+| 비서 저장소 | Redis 7 (대화 맥락 24시간, 시간표 AOF 보관, 비밀번호) | ✅ |
 | 배포 서버 | 학교 실습 서버 (사비 0원 원칙. HTTPS가 안 되면 Cloudflare Tunnel 무료로 보완) | ✅ |
 
 ## 3. 브랜치 전략 — 간소화 Git Flow ✅
@@ -89,16 +95,16 @@ gitGraph
 
 | 저장소 | 담는 것 |
 |---|---|
-| `core`, `front` (나중에 `mspace-assistant`) | 자기 `Dockerfile`, PR 빌드·테스트 · 이미지 올리기 Actions, 로컬 개발용 compose(DB만) |
-| `infra` | 서버용 compose(개발/시연), nginx 설정, `.env.example`, DB 백업 스크립트, 배포 README |
+| `mspace-core`, `mspace-web`, `mspace-assistant`, `mspace-gateway` | 자기 `Dockerfile`, PR 빌드·테스트 · 이미지 올리기(amd64 · arm64) · 서버 배포 Actions |
+| `infra` | 서버용 compose(게이트웨이 · web · core · mcp · agent · Redis · DB, 개발/시연 같은 파일), `.env.example`, DB 백업·복구 스크립트, 배포 README |
 
 ## 4. 배포 흐름
 
 | 언제 | 무엇이 | 결과 |
 |---|---|---|
 | PR 올릴 때 | 빌드 · 테스트 · 품질 검사 | 실패하면 합치기 불가 |
-| develop 합칠 때 | 이미지 빌드 → GHCR → **개발 서버**에서 `docker compose pull && up -d` | 수 분 안에 개발 주소에 반영 |
-| main 합칠 때 (버전 완료) | 같은 이미지를 **시연 서버**에 배포 + 태그·Release | 시연 주소에 반영 |
+| develop 합칠 때 | 이미지 빌드 → GHCR → **개발 서버**에서 `docker compose pull && up -d` (`DEPLOY_ENABLED=true`, 11-05부터 자동) | 수 분 안에 `https://dev-mspace.java21.net`에 반영 |
+| main 합칠 때 (버전 완료) | 같은 이미지를 **시연 서버**에 배포 + 태그·Release | `https://mspace.java21.net`에 반영 |
 | 배포 직후 | `/actuator/health` 확인 | 실패하면 Actions가 빨간불 |
 
 ## 5. 환경
@@ -114,12 +120,12 @@ gitGraph
 
 | 포트 | 용도 |
 |---|---|
-| 8410 | 시연 서버 입구 (`main`, 시연 도메인) |
-| 8411 | 개발 서버 입구 (`develop`, 개발 도메인) |
-| 8415 | 시연용 PostgreSQL (외부 노출 안 함) |
-| 8416 | 개발용 PostgreSQL (외부 노출 안 함) |
+| 8413 | 개발 서버 입구 (`develop`, `dev-mspace.java21.net`, compose 프로젝트 `mspace-dev`, `.env.dev`) |
+| 8414 | 시연 서버 입구 (`main`, `mspace.java21.net`, compose 프로젝트 `mspace-prod`, `.env.prod`) |
 
-core·front·mspace-assistant는 입구 뒤 내부 네트워크로만 연결해 포트를 따로 열지 않는다.
+- 8410·8411은 다른 프로젝트(블로그)가 쓰고 있어 11-05에 8413·8414로 옮겼다.
+- 밖으로 여는 포트는 **게이트웨이 하나**다. web·core·mcp·agent·Redis·DB는 compose 내부 네트워크로만 연결하고 포트를 열지 않는다.
+- 게이트웨이도 `0.0.0.0`으로 열지 않는다(Docker 포트는 ufw를 건너뛴다). 학교 서버는 `BIND_ADDR=10.116.64.12`, 맥은 기본 `127.0.0.1`.
 
 다른 팀원은 각자 포트 범위에서 개인 테스트 환경을 띄운다. 접속 정보(계정·비밀번호)는 공개 저장소에 올리지 않고 팀 안에서만 공유한다.
 
@@ -127,6 +133,7 @@ core·front·mspace-assistant는 입구 뒤 내부 네트워크로만 연결해 
 
 - 비밀번호·키는 **저장소에 절대 올리지 않는다.** GitHub Actions Secrets에만 두고, 배포 때 서버의 `.env`로 전달.
 - `.env`는 `.gitignore`에 넣고, 저장소에는 `.env.example`(값 없이 항목만)만 둔다.
+- 서버 `.env`에 들어가는 값: `JWT_SECRET`(core·게이트웨이 같은 값), DB 비밀번호, `REDIS_PASSWORD`, `MSPACE_DEVICE_TOKEN`, `MAIL_*`, `GEMINI_API_KEY`. 환경(개발/시연)마다 다른 값을 쓴다.
 - **사비 0원 원칙.** 유료 클라우드(AWS 등)는 쓰지 않는다. 학교 서버가 안 되는 부분은 무료 대안(Cloudflare Tunnel, Oracle Cloud 무료 등급)으로 메운다.
 
 ## 7. 운영 기본
@@ -135,14 +142,14 @@ core·front·mspace-assistant는 입구 뒤 내부 네트워크로만 연결해 
 |---|---|
 | 설정 분리 | Spring 프로필 `local` / `dev` / `prod`. 값은 `.env`에서 |
 | 되돌리기 | 이미지 태그를 이전 버전(`v0.1`)으로 바꾸고 `docker compose up -d` |
-| DB 백업 | 시연 DB를 매일 새벽 `pg_dump`로 백업 (최근 7일 보관) |
+| DB 백업 | `scripts/backup.sh`를 cron으로 매일 실행, `backups/dev/`·`backups/prod/`에 7일 보관. 복구는 `scripts/restore.sh` |
 | 시연 대비 | 학교 서버·와이파이가 죽어도 되게 노트북에서 `docker compose`로 전체 띄우기 연습 + 시연 영상 녹화 |
 
 ## 8. 결정 대기
 
 | 항목 | 추천 | 확인할 것 |
 |---|---|---|
-| 학교 서버 조건 | 학교 서버로 확정 (자원은 강사님이 지원) | 11/20까지 사용 가능? HTTPS? Actions에서 SSH 키 배포 허용? |
+| 학교 서버 조건 | 학교 서버로 확정 (자원은 강사님이 지원). HTTPS(학교 nginx)·Actions SSH 배포는 11-05에 됨 | 발표(11/19)까지 사용 가능한지 |
 
 ## 9. 용어 한 줄 설명
 
@@ -155,7 +162,7 @@ core·front·mspace-assistant는 입구 뒤 내부 네트워크로만 연결해 
 | Docker 이미지 | 앱과 실행 환경을 통째로 담은 "상자" |
 | GHCR | GitHub의 이미지 "창고". Actions가 올리고 서버가 받아 간다 |
 | docker compose | 상자 여러 개를 한 번에 띄우는 설정 파일 |
-| 입구 프록시 | 요청을 주소에 따라 front, core로 나눠 주는 정문 (우리는 nginx) |
+| API 게이트웨이 | 요청을 주소에 따라 web, core, 비서로 나눠 주고 로그인 토큰을 먼저 확인하는 정문 (우리는 Spring Cloud Gateway) |
 | Flyway | DB 변경을 버전 파일로 순서대로 적용하는 도구 |
 
 > GHCR을 쓰는 이유: 빌드를 GitHub이 해서 공용 학교 서버가 느려지지 않고, 버전마다 이미지가 남아 있어 문제가 생기면 바로 이전 버전으로 되돌릴 수 있다.
