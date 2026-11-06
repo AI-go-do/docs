@@ -77,7 +77,7 @@ AI 비서·MCP(v0.3) ─▶ core API만 호출
 | `IdentityVerifier` | 학교 메일 인증 | 학교 학사 DB |
 | `AccessDevice` | 키패드 모형 → NFC·QR (1실) | 실제 도어락 |
 | `NotificationChannel` | 메일 | 텔레그램·푸시 |
-| `PresenceDetector` | 레이더·조도·CO2 규칙 | 다른 센서 |
+| `PresenceDetector` | PIR·조도·CO2 규칙 (레이더는 8차 회의에서 환불) | 카메라 인원 세기(Q-17), 다른 센서 |
 | `LlmClient` | Gemini | Ollama (Jetson 보드 B) |
 
 - 장치가 같은 신호를 두 번 보내도 `eventId`로 한 번만 처리합니다

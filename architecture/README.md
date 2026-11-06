@@ -95,7 +95,7 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
   | **11/19 (목)** | 본선 발표 (IT 페스티벌 당일) |
 - 일정이 밀리면 v0.3 → v0.2 순서로 줄여요. v0.1 예약 한 바퀴는 자르지 않아요.
 - **하지 않는 것**: 키박스, 학교 학사 DB 직접 연동, 학과 공지 · 휴강 수집(8차 회의), 실제 도어락.
-- **8차 회의(11-06)로 바뀐 것**: 입실은 시험용 방 **1실**에서 키패드 → NFC → QR 차례로 시도하고, 시연은 카메라 인원 세기 + QR이에요(키패드는 "1차 시도"로 슬라이드에만). 카메라는 "인원 숫자만, 영상 저장 없음" 안으로 **팀 결정 대기**예요(요구사항 1장 "카메라 없이" 원칙은 결정 전까지 그대로).
+- **8차 회의(11-06)로 바뀐 것**: 입실은 시험용 방 **1실**에서 키패드 → NFC → QR 차례로 시도하고, 시연은 카메라 인원 세기 + QR이에요(키패드는 "1차 시도"로 슬라이드에만). 요구사항 1장 원칙은 v0.4.19(11/6 지영)에서 "카메라 없이" → "**사진·영상 남기지 않기**"로 바뀌었고, 방 카메라는 퇴실 뒤 정리 확인(FR-DEV-105)에 써요. 카메라 인원 세기로 재실을 판단할지는 Q-17 **팀 결정 대기**예요.
 - 버전이 하나 끝나면 위 그림에 그 버전 상자를 실선으로 바꿔요.
 
 ## 구성 요소
@@ -103,7 +103,7 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
 | 상자 | 저장소 | 기술 | 하는 일 |
 |---|---|---|---|
 | 휴대폰 (PWA) · 화면 web | `mspace-web` | PWA | 로그인, 빈방(빈 방 누르면 지금 바로 쓰기), 예약(친구만 함께), 입실 번호·입실 QR, 사용 중 카드(퇴실·연장·아직 있어요), 사진, 신고, 알림함, 친구, 비서 채팅. 사진은 900KB 아래로 줄여 보냄 |
-| nginx | (학교 서버, compose 밖) | nginx (Nginx Proxy Manager) | 도메인(`mspace.java21.net`, `dev-mspace.java21.net`)을 우리 포트(8414 시연, 8413 개발)로 넘김. HTTPS. 업로드 한도 1MB |
+| nginx | (학교 서버, compose 밖) | nginx (Nginx Proxy Manager) | 도메인(`mspace.java21.net`, `dev-mspace.java21.net`)을 우리 포트(8414 시연, 8413 개발)로 넘김. HTTPS. 업로드 한도 100MB(11/6, 처음 1MB) |
 | API 게이트웨이 | `mspace-gateway` (compose는 `infra`) | Java 21 · Spring Cloud Gateway (WebFlux) | 밖에서 들어오는 유일한 문. JWT 확인, `/api/agent/**` → agent, `/api/**` → core, `/` → web, 로드밸런싱 |
 | mspace-core | `mspace-core` | Java 21 · Spring Boot 4 · 모듈러 모놀리스 | 예약 규칙, 로그인, 출입 번호 확인. 포트와 어댑터 구조 |
 | PostgreSQL | `infra` (compose) | PostgreSQL 16 · Flyway | 겹침 금지(EXCLUDE) 제약, 테이블 버전 관리. 밖으로 포트 안 열림 |
@@ -112,7 +112,8 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
 | Redis | `infra` (compose) | Redis 7 | 비서 대화 맥락(24시간 TTL)·시간표(TTL 없음, AOF). 비밀번호, 밖으로 포트 안 열림 |
 | 키패드 + 우노 | `mspace-device` | Arduino | 6자리 + `#` 입력, 초록·빨강 LED. 8차 회의 뒤 "1차 시도"(1실에서 NFC · QR로 이어 감) |
 | 중계 gateway.py | `mspace-device` | Python | 입력을 `POST /api/access/verify`로 전달. 나중에 Jetson 보드 B로 옮김 |
-| 재실 센서 (v0.2) | `mspace-device` | PIR · 조도 · 레이더 · CO2 | 빈 방 판단 보조 |
+| 재실 센서 (v0.2) | `mspace-device` | PIR · 조도 · CO2 (레이더는 8차 회의에서 환불) | 빈 방 판단 보조 |
+| 방 카메라 (젯슨 보드 B) | `mspace-device` `room_camera.py` | 웹캠 · YOLO | 퇴실 뒤 정리 확인(FR-DEV-105, 물건 이름만 core로). 사람 수도 세어 재실 이벤트 `sources.people`로 보냄(Q-17 결정 대기). 화면은 저장·전송하지 않음 |
 | Gemini / Ollama | (외부) | `LlmClient` 포트 + 어댑터 2개 | Gemini(`gemini-3.5-flash-lite`)는 시연용, Ollama는 로컬(보드 B 후보). 둘 다 develop에 있음. 학번은 모델로 보내지 않음 |
 | GitHub Actions → GHCR | 각 저장소 `.github` | Actions · GHCR | 빌드·테스트 → 이미지(amd64 · arm64) → SSH로 학교 서버에 배포. `DEPLOY_ENABLED=true`(11-05)라 develop에 합치면 개발 서버에 자동 반영 ([인프라 · CI/CD](../infra/infra-cicd.md)) |
 
@@ -153,7 +154,7 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
 |---|---|---|---|
 | 그림 파일 | `mspace-architecture.png` · `deploy-security.png`는 11-04 그림. Redis, 비서 실선, 8414/8413 포트가 없음 | 다음 그림 갱신 때 같이 | 재웅 |
 | 입실 방식 | core는 키패드(`POST /api/access/verify`)만 있음. 8차 회의로 1실에서 NFC · QR도 시도 | 같은 확인 API에 방식(`KEYPAD` · `NFC` · `QR`)만 다르게 받을지 정하기 | 지영 · 수연 |
-| 카메라 인원 세기 | 요구사항 원칙은 "카메라 없이" | 팀 결정 뒤 `PresenceDetector` 어댑터로 붙임(숫자만, 영상 저장 없음 안) | 팀 |
+| 카메라 인원 세기 | device `room_camera.py`는 이미 사람 수를 세어 재실(`occupied = 사람 > 0 또는 PIR`)에 쓰고 있음. 요구사항은 Q-17 결정 대기 | 11/9 점검 전 Q-17 결정 → 요구사항 FR-DEV-101·103에 반영 | 팀 |
 | 노쇼 · 자동 퇴실 | 요구사항은 v0.2인데 core에 이미 있고 켜져 있음 | 시연 전 동작 확인 | — |
 | agent `CORE_BASE_URL` | compose가 넘기지만 agent가 안 씀 | compose에서 빼기 | 재웅 |
 | 중계 `gateway.py` | 기본 주소 `http://localhost:8080` | 맥은 `http://localhost:8413`, 서버는 `https://dev-mspace.java21.net` | 디바이스 담당 |
