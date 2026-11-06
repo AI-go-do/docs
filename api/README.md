@@ -605,18 +605,25 @@ CO2:
 
 ```json
 { "eventId": "5b0e1c2a-…", "reservationId": 40, "deviceId": "camera-2",
-  "result": "LEFT_ITEM", "items": ["cup", "backpack"], "observedAt": "2026-11-09T14:53:00+09:00" }
-→ 200 { "result": "STORED" } 또는 { "result": "DUPLICATE" }
+  "result": "NEEDS_CLEANING", "items": ["cup", "bottle", "backpack"], "leftItems": ["BAG"],
+  "observedAt": "2026-11-09T14:53:00+09:00" }
+→ 200 { "result": "STORED", "reportId": 12 } 또는 { "result": "DUPLICATE", "reportId": 12 }
 ```
 
 | 필드 | 형식 | 뜻 |
 |---|---|---|
-| `eventId` | 글자 1~64자 | 센서와 같아요. 같은 값을 다시 보내면 `DUPLICATE`로 한 번만 저장 |
+| `eventId` | 글자 1~64자 | 센서와 같아요. 같은 값을 다시 보내면 `DUPLICATE`로 한 번만 처리 |
 | `reservationId` | 정수 | `current`의 `lastEnded.reservationId` |
 | `deviceId` | 글자 50자 이하 | 보낸 장치(`camera-방번호`) |
-| `result` | `CLEAN` · `NEEDS_CLEANING` · `LEFT_ITEM` | 깨끗함 / 치울 것(컵·쓰레기) / 두고 간 물건(가방·휴대폰 등). 둘 다면 `LEFT_ITEM` |
-| `items` | 글자 배열, 0~20개, 각 50자 이하 | 본 물건 이름(모델이 내는 이름 그대로, 예: `cup` `bottle` `backpack`) |
+| `result` | `CLEAN` · `NEEDS_CLEANING` | 깨끗함 / 치울 것이 있음(컵·쓰레기 등) |
+| `items` | 글자 배열, 0~20개, 각 50자 이하 | 본 물건 이름 전부(모델이 내는 이름 그대로). 관리자 판정 때 근거로 보여 줘요 |
+| `leftItems` | `BAG` · `PHONE` · `EARBUDS` 배열, 0~3개 | 두고 간 귀중품. 이 셋만 알림을 보내요(11/6 지영) |
 | `observedAt` | 시각 `+09:00` | 확인한 시각 |
+
+**core가 하는 일**
+- `NEEDS_CLEANING` → 그 방에 **어질러짐(`MESSY`) 신고를 자동으로 하나 만들어요**(신고자 없음, `source: CAMERA`, 내용에 `items`). 관리자가 판정하는 흐름은 사람 신고와 같고(`POST /api/reports/{id}/judge`), 사실(`CONFIRMED`)이면 **이 예약의 대표자**에게 경고가 가요(FR-RPT-104 규칙 그대로, 30일 3번 → 14일 정지). 허위(`FALSE`)여도 신고자가 없으니 경고는 없어요. 응답 `reportId`가 그 신고 번호(`CLEAN`이면 `null`).
+- `leftItems`가 있으면 → 그 예약의 대표자·참여자 모두에게 알림 `LEFT_ITEM` "2번 방에 가방을 두고 가셨어요". 벌칙 없음.
+- 카메라 결과만으로 바로 경고하지 않아요. 사진을 안 남겨서 잘못 봤을 때(방 원래 컵, 그림자) 학생이 반박할 증거가 없기 때문에 관리자가 한 번 걸러요(11/6 지영).
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
@@ -627,15 +634,17 @@ CO2:
 
 ### `GET /api/tidy-checks?days=7` 정리 확인 목록 — 관리자만
 
-최근 N일(1~92, 기본 7) 결과를 최근 순으로 줘요. 관리자 화면에서 "치울 것·두고 간 물건이 있는 방"을 볼 때 써요. 관리자가 아니면 `403 ADMIN_ONLY`.
+최근 N일(1~92, 기본 7) 결과를 최근 순으로 줘요. 관리자가 아니면 `403 ADMIN_ONLY`.
 
 ```json
 200
 { "items": [ { "reservationId": 40, "roomId": 2, "roomName": "2번 방", "endedAt": "2026-11-09T14:52:10+09:00",
-               "result": "LEFT_ITEM", "items": ["cup", "backpack"], "observedAt": "2026-11-09T14:53:00+09:00" } ] }
+               "result": "NEEDS_CLEANING", "items": ["cup", "bottle", "backpack"], "leftItems": ["BAG"],
+               "reportId": 12, "observedAt": "2026-11-09T14:53:00+09:00" } ] }
 ```
 
-- 신고 증거(`GET /api/reports/{id}/evidence`, core #76)의 앞 예약 칸에도 같은 결과를 `tidyCheck`로 붙여요(없으면 `null`). 어질러짐 신고가 들어오면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
+- 신고 목록(`GET /api/reports`)에 자동 신고는 `source: "CAMERA"`, 사람 신고는 `source: "USER"`로 나와요.
+- 신고 증거(`GET /api/reports/{id}/evidence`, core #76)의 앞 예약 칸에도 같은 결과를 `tidyCheck`로 붙여요(없으면 `null`). 사람이 어질러짐을 신고하면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
 
 ## 7. 비서 (`/api/agent`) — 로그인 필요, assistant `develop`
 
