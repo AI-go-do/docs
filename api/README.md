@@ -33,14 +33,14 @@
 | 관리자 | `GET /api/reports?verdict=OPEN` | 신고 목록 | FR-RPT-103 | ✅ develop |
 | 관리자 | `POST /api/reports/{id}/judge` | 신고 판정 + 경고·정지·알림 | FR-RPT-103·104 | ✅ develop |
 | 관리자 | `POST /api/reservations/{id}/force-checkout` | 강제 퇴실 (퇴출) | FR-RPT-104 | ✅ develop |
-| 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 | FR-WEB-101 | PR 대기 (core #76) |
+| 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 | FR-WEB-101 | ✅ develop (core #76) |
 | 관리자 | `GET /api/penalties?days=30` | 경고·정지 목록 | FR-WEB-101 | ✅ develop |
 | 관리자 | `GET /api/stats/usage?from=&to=` | 이용 통계 (이용률·노쇼율·시간대·센서) | FR-WEB-101 | ✅ develop |
 | 화면 | `GET /api/notifications/me` | 내 알림함 (최근 50개, 읽음 여부) | FR-NTF-103 | ✅ develop |
 | 화면 | `GET /api/notifications/me/unread-count` | 안 읽은 알림 개수 (종 아이콘 점) | FR-NTF-103 | ✅ develop |
 | 화면 | `POST /api/notifications/{id}/read` | 알림 하나 읽음 | FR-NTF-103 | ✅ develop |
 | 화면 | `POST /api/notifications/read-all` | 내 알림 모두 읽음 | FR-NTF-103 | ✅ develop |
-| 키패드 | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 | FR-ACC-001 | ✅ develop |
+| 키패드·QR | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 (문 앞 웹캠 QR도 같은 API) | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | ✅ develop |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
@@ -51,6 +51,7 @@
 | 화면 | `GET`·`PUT`·`DELETE /api/agent/schedule` | 내 시간표 보기·통째로 바꾸기·지우기 | FR-AGT-102a | ✅ develop (assistant) |
 | 화면 | `POST /api/agent/schedule/parse` | 시간표 캡처 읽기 (초안만, 저장 안 함) | FR-AGT-102a | ✅ develop (assistant) |
 | 화면 | `GET /api/agent/briefing` | 오늘 브리핑 (시간표·예약·빈 방·수업 뒤 칸, 모델 안 거침) | FR-AGT-102b·103 | ✅ develop (assistant) |
+| 화면 | `GET`·`PUT /api/agent/persona` | 비서 성향 보기·고르기 (조용히·알아서·잔소리) | 8차 회의(요구사항 ID 대기) | ✅ develop (assistant #85) |
 
 `/api/agent/`로 시작하면 API 게이트웨이가 비서 서버(agent)로, 나머지 `/api/`는 core로 보내요. 게이트웨이가 로그인 토큰을 먼저 확인해요([아키텍처](../architecture/README.md)).
 
@@ -444,7 +445,7 @@
 |---|---|---|
 | `GET /api/penalties?days=30` | ✅ develop (core #75) | 경고·정지 목록 |
 | `GET /api/stats/usage?from=&to=` | ✅ develop (core #74) | 이용 통계 + 센서 값 |
-| `GET /api/reports/{id}/evidence` | PR 대기 (core #76) | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음). 방 카메라 자동 신고는 `reporter: null` |
+| `GET /api/reports/{id}/evidence` | ✅ develop (core #76) | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음). 방 카메라 자동 신고는 `reporter: null` |
 
 #### `GET /api/penalties?days=30` 경고·정지 목록
 
@@ -517,13 +518,15 @@
 
 `POST /api/notifications/read-all` 모두 읽음 → `200 { "count": 2 }` (이번에 읽음으로 바뀐 개수)
 
-## 6. 출입 (키패드)
+## 6. 출입 (키패드 · QR)
 
 ### `POST /api/access/verify` — 장치 토큰 필요
 
 ```json
 { "eventId": "1-48213-18", "roomId": 1, "deviceId": "keypad-1", "code": "123456" }
 ```
+문 앞 웹캠 QR 입실(device #26)도 이 API를 그대로 불러요. 폰 화면의 입실 QR(`MSPACE:<방>:<6자리>`, 예약 응답 `qrText`)에서 6자리만 꺼내 `code`로 보내요. 다른 방 QR은 장치가 서버에 묻지 않고 거절해요.
+
 `eventId`(1~64자)는 장치가 누를 때마다 새로 만드는 값이라, 같은 값이 다시 와도 한 번만 처리하고 처음 결과를 그대로 돌려줘요. `deviceId`는 50자 이하(선택).
 
 → 거절도 `200`이에요. 장치는 `result`만 보고 LED를 켜요.
@@ -855,6 +858,24 @@ PUT { "classes": [ { "dayOfWeek": "MON", "startTime": "09:00", "endTime": "10:15
 - `afterClass`: 오늘 수업이 있고 대표자 예약이 없을 때만 수업 뒤 가장 이른 칸 하나. `suggestions` 버튼을 누르면 채팅으로 보내 확인 카드까지 가요
 - `Cache-Control: no-store`. 오류는 `401 UNAUTHORIZED`만
 
+### `GET`·`PUT /api/agent/persona` 비서 성향 (assistant #85, 8차 회의)
+
+학생이 비서 성향을 셋 중 하나로 골라요. 성향은 지시문 끝 한 토막만 바꾸고, 두 단계 확인·개인정보 규칙은 그대로예요(assistant `docs/설계.md` 5.v).
+
+| `style` | 이름 | 하는 일 |
+|---|---|---|
+| `QUIET` | 조용히 | 물은 것만 짧게, 제안 없음, 빠른 답장 버튼 없음 |
+| `ACTIVE` | 알아서 (기본) | 답 끝에 다음 행동 하나 제안 |
+| `NAGGING` | 잔소리 | 입실·퇴실·연장·노쇼·시간표를 매번 챙기고 재촉 |
+
+```json
+GET  → { "style": "ACTIVE", "label": "알아서", "description": "...", "options": [{ "style": "QUIET", "label": "조용히", "description": "..." }, ...] }
+PUT  { "style": "NAGGING" } → 같은 모양
+```
+- 채팅으로 "잔소리 모드로 해 줘"라고 해도 모델 없이 같은 저장을 해요(`tools: ["persona"]`)
+- 저장은 학생(토큰 `sub`)별, 기간 없음. "새 대화"로 안 지워져요
+- 오류: `400 INVALID_PERSONA`(틀린 `style`), `503 MEMORY_UNAVAILABLE`(저장 실패. 읽기 실패는 기본 성향으로 넘어가요), `401 UNAUTHORIZED`
+
 ## 8. 코드와 문서가 아직 다른 곳 (11/6 점검)
 
 11/3~6에 적었던 줄(알림 읽음 #69, 판정 벌칙 #70, 강제 퇴실 #73, 연장 #51, 신고 #52, 노쇼 벌칙 #58, `created_via` #45 + 비서 #54, 자리 비움 `AWAY_RELEASED`, 센서 #60·게이트웨이 공개 경로, 비서 API)은 모두 develop에 머지돼 지웠어요.
@@ -864,4 +885,4 @@ PUT { "classes": [ { "dayOfWeek": "MON", "startTime": "09:00", "endTime": "10:15
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
 | 센서용 장치 토큰 | 키패드와 같은 토큰 하나 (6-2장 "정할 것") | 장치마다 따로 둘지 정하기(지영·재웅). 11/6 2번 방 키패드 토큰 추가 예정 |
 | 입실 방식 NFC · QR | 8차 회의(11/6): 시험용 방 1실에서 키패드 → NFC → QR. 지금 API는 키패드(6장)만 | 요구사항 Q-16이 정해지면 6장에 방식별 모양 추가(지영·수연) |
-| 증거 사진 | core #76 PR 대기 (5장 "관리자 화면용 API") | 머지되면 0장 상태 ✅로, 응답 예시 추가 |
+| 증거 사진 | core #76 머지됨, 응답 예시는 아직 없음 (5장 "관리자 화면용 API") | 응답 예시 추가 |
