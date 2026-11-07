@@ -35,7 +35,7 @@
 | 관리자 | `POST /api/reservations/{id}/force-checkout` | 강제 퇴실 (퇴출) | FR-RPT-104 | ✅ develop |
 | 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 | FR-WEB-101 | ✅ develop (core #76) |
 | 관리자 | `GET /api/penalties?days=30` | 경고·정지 목록 | FR-WEB-101 | ✅ develop |
-| 관리자 | `GET /api/stats/usage?from=&to=` | 이용 통계 (이용률·노쇼율·시간대·센서) | FR-WEB-101 | ✅ develop |
+| 관리자 | `GET /api/stats/usage?from=&to=` | 이용 통계 (이용률·노쇼율·시간대·센서·알림 효과) | FR-WEB-101 | ✅ develop · 알림 효과 core #93 |
 | 화면 | `GET /api/notifications/me` | 내 알림함 (최근 50개, 읽음 여부) | FR-NTF-103 | ✅ develop |
 | 화면 | `GET /api/notifications/me/unread-count` | 안 읽은 알림 개수 (종 아이콘 점) | FR-NTF-103 | ✅ develop |
 | 화면 | `POST /api/notifications/{id}/read` | 알림 하나 읽음 | FR-NTF-103 | ✅ develop |
@@ -43,6 +43,7 @@
 | 키패드·QR | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 (문 앞 웹캠 QR도 같은 API) | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | ✅ develop |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
+| 화면 | `GET /api/penalties/me` | 내 경고 횟수·정지 ("내 경고 0회") | FR-WEB-003 · FR-RPT-104 | ✅ develop (core #92) |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
 | 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT-101 | ✅ develop (assistant) |
 | 화면 | `DELETE /api/agent/chat/history` | 새 대화 (서버가 기억한 대화 지우기) | FR-AGT-101 | ✅ develop (assistant) |
@@ -444,7 +445,7 @@
 | 주소 | 상태 | 하는 일 |
 |---|---|---|
 | `GET /api/penalties?days=30` | ✅ develop (core #75) | 경고·정지 목록 |
-| `GET /api/stats/usage?from=&to=` | ✅ develop (core #74) | 이용 통계 + 센서 값 |
+| `GET /api/stats/usage?from=&to=` | ✅ develop (core #74, 알림 효과 #93) | 이용 통계 + 센서 값 + 알림 효과 |
 | `GET /api/reports/{id}/evidence` | ✅ develop (core #76) | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음). 방 카메라 자동 신고는 `reporter: null` |
 
 #### `GET /api/penalties?days=30` 경고·정지 목록
@@ -485,7 +486,10 @@
              "shortUses": 5, "uniqueUsers": 18,
              "sensor": { "co2Readings": 1200, "co2AvgPpm": 720, "co2MaxPpm": 1350, "co2OverRate": 0.08,
                          "thresholdPpm": 1000, "ventilationAlerts": 3,
-                         "occupiedMinutes": 2800, "occupiedWithoutReservationMinutes": 40 } },
+                         "occupiedMinutes": 2800, "occupiedWithoutReservationMinutes": 40 },
+             "alerts": { "noShowWarned": 6, "noShowCheckedIn": 4, "noShowCheckedInRate": 0.667,
+                         "ventilationChecked": 3, "ventilationResolved": 2, "ventilationResolvedRate": 0.667,
+                         "resolvedWithinMinutes": 15 } },
   "rooms": [{ "roomId": 1, "roomName": "창작실 1", "...": "total과 같은 모양" }],
   "byHour": [{ "hour": 14, "reservations": 6, "used": 5 }] }
 ```
@@ -501,6 +505,10 @@
 | `uniqueUsers` | 기간 안에 입실한 예약의 서로 다른 회원 수 (대표자·참여자 모두) |
 | `sensor.*` | CO2 평균·최고·기준(`thresholdPpm`) 넘은 비율, 환기 알림 수. 재실 분은 센서가 바뀔 때만 기록해서, 바뀐 기록 사이를 그 상태로 본 근삿값 |
 | `sensor.occupiedWithoutReservationMinutes` | 예약 없이 사람이 있던 시간 (무단 사용 의심) |
+| `alerts.noShowWarned` · `noShowCheckedIn` | 노쇼 직전 알림(`NO_SHOW_SOON`)을 받은 예약 수(시작 시각이 기간 안), 그중 입실한 수. 아직 입실 마감 전이라 결과가 안 난 예약은 빼요 |
+| `alerts.ventilationChecked` · `ventilationResolved` | 환기 알림(`VENTILATE`, 같은 방·같은 시각은 한 번) 수, 그중 알림 뒤 `resolvedWithinMinutes`분 안에 CO2가 기준(`thresholdPpm`) 이하로 내려간 수. 알림 뒤 그 시간이 아직 안 지난 알림은 빼요 |
+| `alerts.*Rate` | 입실 수 / 알림 받은 예약 수, 내려간 수 / 환기 알림 수. 0–1, 소수 셋째 자리, 분모가 0이면 `null` |
+| `alerts.resolvedWithinMinutes` | 환기 결과를 보는 시간 (15분, 설정값 `mspace.sensor.co2.resolved-within-minutes`) |
 
 ## 5-2. 알림함 — 모두 로그인 필요 (FR-NTF-103)
 
@@ -585,7 +593,26 @@
 | `conduct[]` | 이용 수칙. `key`는 `NOISE` `FOOD` `TIDY` `NO_SHOW` `AWAY` `PHOTO` `DOOR` `BELONGINGS` (8개), `title`·`rule`·`penalty`는 화면에 그대로 보여 줄 문장 |
 | `reminders.checkin` · `checkout` | 체크인 직후, 퇴실 확인 창에 보여 줄 한 줄 |
 
-- 내 경고 횟수("내 경고 0회")는 이 응답에 없어요. 로그인한 사람마다 다른 값이라 신고 판정 쪽 API에서 따로 줘요(FR-RPT-104, 아직 없음).
+- 내 경고 횟수("내 경고 0회")는 이 응답에 없어요. 로그인한 사람마다 다른 값이라 아래 `GET /api/penalties/me`에서 따로 줘요.
+
+### `GET /api/penalties/me` 내 경고 횟수 — 로그인 필요 (core #92)
+
+이용 규칙 화면 위쪽 "내 경고 0회"(FR-WEB-003)에 쓰는 값이에요. 로그인한 본인 것만 줘요. 로그인 안 하면 `401`.
+- 숫자는 판정 때 정지를 거는 셈과 같은 방식으로 세요(FR-RPT-104). 그래서 화면 숫자와 실제 정지가 어긋나지 않아요. 정지가 한 번 걸리면 그때까지의 경고는 빼고 다시 세요.
+
+```json
+200
+{ "warnings": 1, "falseReportWarnings": 0, "limit": 3, "windowDays": 30,
+  "suspendedUntil": null, "reportSuspendedUntil": null }
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `warnings` | 최근 `windowDays`일 안 위반 경고(`VIOLATION`) 수 |
+| `falseReportWarnings` | 최근 `windowDays`일 안 허위 신고 경고(`FALSE_REPORT`) 수 |
+| `limit` · `windowDays` | 위반 경고·허위 신고 경고 각각 `windowDays`일 안 `limit`회면 정지 (3회 · 30일, 설정값) |
+| `suspendedUntil` | 이용 정지(예약·참여, 노쇼 누적 포함) 중이면 끝나는 시각(`+09:00`), 아니면 `null` |
+| `reportSuspendedUntil` | 신고 정지 중이면 끝나는 시각, 아니면 `null` |
 
 ## 6-2. 재실 · CO2 센서
 
