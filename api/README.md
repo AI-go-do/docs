@@ -43,6 +43,7 @@
 | 키패드·QR | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 (문 앞 웹캠 QR도 같은 API) | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | ✅ develop |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
+| 화면 | `GET /api/penalties/me` | 내 경고 횟수·정지 ("내 경고 0회") | FR-WEB-003 · FR-RPT-104 | ✅ develop (core #92) |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
 | 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT-101 | ✅ develop (assistant) |
 | 화면 | `DELETE /api/agent/chat/history` | 새 대화 (서버가 기억한 대화 지우기) | FR-AGT-101 | ✅ develop (assistant) |
@@ -585,7 +586,26 @@
 | `conduct[]` | 이용 수칙. `key`는 `NOISE` `FOOD` `TIDY` `NO_SHOW` `AWAY` `PHOTO` `DOOR` `BELONGINGS` (8개), `title`·`rule`·`penalty`는 화면에 그대로 보여 줄 문장 |
 | `reminders.checkin` · `checkout` | 체크인 직후, 퇴실 확인 창에 보여 줄 한 줄 |
 
-- 내 경고 횟수("내 경고 0회")는 이 응답에 없어요. 로그인한 사람마다 다른 값이라 신고 판정 쪽 API에서 따로 줘요(FR-RPT-104, 아직 없음).
+- 내 경고 횟수("내 경고 0회")는 이 응답에 없어요. 로그인한 사람마다 다른 값이라 아래 `GET /api/penalties/me`에서 따로 줘요.
+
+### `GET /api/penalties/me` 내 경고 횟수 — 로그인 필요 (core #92)
+
+이용 규칙 화면 위쪽 "내 경고 0회"(FR-WEB-003)에 쓰는 값이에요. 로그인한 본인 것만 줘요. 로그인 안 하면 `401`.
+- 숫자는 판정 때 정지를 거는 셈과 같은 방식으로 세요(FR-RPT-104). 그래서 화면 숫자와 실제 정지가 어긋나지 않아요. 정지가 한 번 걸리면 그때까지의 경고는 빼고 다시 세요.
+
+```json
+200
+{ "warnings": 1, "falseReportWarnings": 0, "limit": 3, "windowDays": 30,
+  "suspendedUntil": null, "reportSuspendedUntil": null }
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `warnings` | 최근 `windowDays`일 안 위반 경고(`VIOLATION`) 수 |
+| `falseReportWarnings` | 최근 `windowDays`일 안 허위 신고 경고(`FALSE_REPORT`) 수 |
+| `limit` · `windowDays` | 위반 경고·허위 신고 경고 각각 `windowDays`일 안 `limit`회면 정지 (3회 · 30일, 설정값) |
+| `suspendedUntil` | 이용 정지(예약·참여, 노쇼 누적 포함) 중이면 끝나는 시각(`+09:00`), 아니면 `null` |
+| `reportSuspendedUntil` | 신고 정지 중이면 끝나는 시각, 아니면 `null` |
 
 ## 6-2. 재실 · CO2 센서
 
