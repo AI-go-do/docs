@@ -376,12 +376,16 @@
 - `noiseConfirmed`: "정말 소란인가요?" 체크. 소음일 때만 필수
 - `content`: 메모, 선택, 500자까지
 - `verdict`는 관리자 판정(FR-RPT-103) 전까지 `OPEN`이에요
+- **어질러짐(`MESSY`)만 더 좁게 받아요(11/8, core #96):** 자기 방만, 입실 뒤 5분 안에만, 그 예약에 입실 사진(`CHECK_IN`)이 있어야 해요. 연장으로 생긴 예약은 안 돼요. 화면은 어질러짐을 고르면 입실 사진을 먼저 올리게 안내해요
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
 | `INVALID_REQUEST` | 400 | `roomId`·`category` 빠짐, 없는 종류, 메모 500자 넘음 |
 | `REPORT_NOISE_NOT_CONFIRMED` | 400 | 소음인데 `noiseConfirmed`가 `true`가 아님 |
 | `REPORT_NOT_ALLOWED` | 403 | 지금 그 방이나 옆 방을 사용 중인 예약자가 아님 (입실 전·퇴실 후 포함) |
+| `REPORT_MESSY_OWN_ROOM_ONLY` | 403 | 어질러짐인데 옆 방을 신고함 |
+| `REPORT_MESSY_TOO_LATE` | 409 | 어질러짐인데 입실 뒤 5분이 지남, 또는 연장으로 생긴 예약 |
+| `REPORT_CHECKIN_PHOTO_REQUIRED` | 409 | 어질러짐인데 그 예약에 입실 사진이 없음 |
 | `REPORT_SUSPENDED` | 403 | 허위 신고 경고가 쌓여 신고 정지 중 (메시지에 끝나는 날짜, FR-RPT-103, core #70) |
 
 ### `GET /api/reports?verdict=OPEN` 신고 목록 — 관리자만
