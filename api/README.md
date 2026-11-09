@@ -35,13 +35,15 @@
 | 관리자 | `POST /api/reservations/{id}/force-checkout` | 강제 퇴실 (퇴출) | FR-RPT-104 | ✅ develop |
 | 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 | FR-WEB-101 | ✅ develop (core #76) |
 | 관리자 | `GET /api/penalties?days=30` | 경고·정지 목록 | FR-WEB-101 | ✅ develop |
-| 관리자 | `GET`·`POST /api/admin/room-blocks` | 기간 막기 목록·만들기 (공사·점검·대관) | Q-23 | ⏳ core #98 리뷰 중 |
-| 관리자 | `POST /api/admin/room-blocks/{id}/release`, `GET …/conflicts`, `POST …/cancel-conflicts` | 풀기, 겹친 예약 보기, 겹친 예약 취소 + 알림 | Q-23 | ⏳ core #98 리뷰 중 |
+| 관리자 | `GET`·`POST /api/admin/room-blocks` | 기간 막기 목록·만들기 (공사·점검·대관) | Q-23 | ✅ develop (core #98) |
+| 관리자 | `POST /api/admin/room-blocks/{id}/release`, `GET …/conflicts`, `POST …/cancel-conflicts` | 풀기, 겹친 예약 보기, 겹친 예약 취소 + 알림 | Q-23 | ✅ develop (core #98) |
 | 관리자 | `GET /api/stats/usage?from=&to=` | 이용 통계 (이용률·노쇼율·시간대·센서·알림 효과) | FR-WEB-101 | ✅ develop · 알림 효과 core #93 |
 | 화면 | `GET /api/notifications/me` | 내 알림함 (최근 50개, 읽음 여부) | FR-NTF-103 | ✅ develop |
 | 화면 | `GET /api/notifications/me/unread-count` | 안 읽은 알림 개수 (종 아이콘 점) | FR-NTF-103 | ✅ develop |
 | 화면 | `POST /api/notifications/{id}/read` | 알림 하나 읽음 | FR-NTF-103 | ✅ develop |
 | 화면 | `POST /api/notifications/read-all` | 내 알림 모두 읽음 | FR-NTF-103 | ✅ develop |
+| 화면 | `GET /api/room-watches/me` | 오늘 켜 둔 빈방 알림 | 11/9 지영 | ✅ develop (core #109) |
+| 화면 | `POST /api/room-watches`, `POST /api/room-watches/{roomId}/cancel` | 빈방 알림 켜기·끄기 (그 방이 비면 알림 한 번) | 11/9 지영 | ✅ develop (core #109) |
 | 키패드·QR | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 (문 앞 웹캠 QR도 같은 API) | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 (CO2에 온도·습도 선택) | FR-DEV-101~104 | ✅ develop · 온도·습도 core #97 |
 | 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·조도·PIR·재실 + 지난 N분 1분 값 | Q-21 | core #97, #106 |
@@ -461,7 +463,7 @@
 | `GET /api/stats/usage?from=&to=` | ✅ develop (core #74, 알림 효과 #93) | 이용 통계 + 센서 값 + 알림 효과 |
 | `GET /api/reports/{id}/evidence` | ✅ develop (core #76) | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음). 방 카메라 자동 신고는 `reporter: null` |
 
-#### 기간 막기 `/api/admin/room-blocks` (Q-23, ⏳ core #98)
+#### 기간 막기 `/api/admin/room-blocks` (Q-23, core #98)
 
 공사·점검·대관으로 방을 일정 기간 예약 못 하게 막아요. 막힌 칸은 미리 예약·즉시 시작·연장이 모두 `409 ROOM_BLOCKED`예요.
 
@@ -573,6 +575,33 @@
 - 없거나 남의 알림이면 `404 NOTIFICATION_NOT_FOUND` (남의 알림이 있는지도 안 알려 줘요)
 
 `POST /api/notifications/read-all` 모두 읽음 → `200 { "count": 2 }` (이번에 읽음으로 바뀐 개수)
+
+알림 종류(`kind`) 중 11/9에 더한 것
+
+| kind | 누구에게 | 제목 · 본문 예 | core |
+|---|---|---|---|
+| `RESERVATION_INVITED` | 대표자를 뺀 참여자 모두. 미리 예약·즉시 시작이 새로 만들어질 때 (같은 멱등 키 재생·연장은 안 보냄) | "함께 쓰는 예약이 생겼어요" · "홍*동님이 11/10(화) 15:00–17:00 2번 방에 함께 예약했어요." 자정을 넘기면 끝에도 날짜. 대표자 이름은 가려서, 학번·입실 번호는 안 넣어요 | #108 |
+| `ROOM_FREE` | 빈방 알림을 켠 사람 (아래 5-4) | "2번 방이 비었어요" · "지켜보던 2번 방이 지금 비었어요. 바로 쓰려면 [지금 바로 쓰기]를 눌러 주세요." `reservationId`는 `null` | #109 |
+
+## 5-4. 빈방 알림 — 모두 로그인 필요 (core #109, 11/9 지영)
+
+지금 쓰이는 방을 "비면 알려 줘"로 켜 두면, 그 방이 비었을 때 알림함에 `ROOM_FREE`가 한 번 와요.
+
+- **"비었다":** 지금 시각을 덮는 `BOOKED`·`IN_USE` 예약도, 풀리지 않은 관리자 막기도 없음. `GET /api/rooms/status`의 지금 비었는지와 같은 기준이에요. 센서 재실은 안 봐요
+- **언제:** 1분 정리가 확인해서 늦어도 1분 안에 와요
+- **하루만, 한 번만:** 켠 날(서울 날짜) 안에서만, 한 번 알리면 꺼져요. 같은 방을 두 번 켜도 하나예요
+
+| 메서드 · 주소 | 하는 일 · 응답 |
+|---|---|
+| `GET /api/room-watches/me` | 오늘 켜 둔 방 → `200 [{ "roomId": 2, "since": "2026-11-09T14:10:00+09:00" }]` |
+| `POST /api/room-watches` `{ "roomId": 2 }` | 켜기 → `200 { "roomId": 2, "since": "…+09:00" }` (이미 켜져 있어도 200) |
+| `POST /api/room-watches/{roomId}/cancel` | 끄기 → `204` (켜져 있지 않아도 204) |
+
+| 코드 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | `roomId`가 없음 |
+| `ROOM_NOT_FOUND` | 404 | 없는 방 |
+| `ROOM_WATCH_FREE` | 409 | 지금 비어 있음 (켤 필요 없이 바로 예약하면 돼요) |
 
 ## 6. 출입 (키패드 · QR)
 
