@@ -35,6 +35,8 @@
 | 관리자 | `POST /api/reservations/{id}/force-checkout` | 강제 퇴실 (퇴출) | FR-RPT-104 | ✅ develop |
 | 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 | FR-WEB-101 | ✅ develop (core #76) |
 | 관리자 | `GET /api/penalties?days=30` | 경고·정지 목록 | FR-WEB-101 | ✅ develop |
+| 관리자 | `GET`·`POST /api/admin/room-blocks` | 기간 막기 목록·만들기 (공사·점검·대관) | Q-23 | ⏳ core #98 리뷰 중 |
+| 관리자 | `POST /api/admin/room-blocks/{id}/release`, `GET …/conflicts`, `POST …/cancel-conflicts` | 풀기, 겹친 예약 보기, 겹친 예약 취소 + 알림 | Q-23 | ⏳ core #98 리뷰 중 |
 | 관리자 | `GET /api/stats/usage?from=&to=` | 이용 통계 (이용률·노쇼율·시간대·센서·알림 효과) | FR-WEB-101 | ✅ develop · 알림 효과 core #93 |
 | 화면 | `GET /api/notifications/me` | 내 알림함 (최근 50개, 읽음 여부) | FR-NTF-103 | ✅ develop |
 | 화면 | `GET /api/notifications/me/unread-count` | 안 읽은 알림 개수 (종 아이콘 점) | FR-NTF-103 | ✅ develop |
@@ -151,10 +153,15 @@
   "date": "2026-11-03", "slotMinutes": 30,
   "rooms": [
     { "roomId": 1, "roomName": "1번 방", "minPeople": 3, "maxPeople": 5,
-      "slots": [ { "startAt": "2026-11-03T14:00:00+09:00", "endAt": "2026-11-03T14:30:00+09:00", "available": true } ] }
+      "occupiedNow": false, "blockedNow": null,
+      "slots": [ { "startAt": "2026-11-03T14:00:00+09:00", "endAt": "2026-11-03T14:30:00+09:00", "available": true,
+                   "block": null } ] }
   ]
 }
 ```
+
+- 관리자가 막은 칸(Q-23)은 `available: false`에 `block: { "reason": "INSPECTION", "memo": "에어컨 점검", "endAt": "…" }`이 붙어요. 지금 막혀 있는 방은 `blockedNow`에 같은 모양, `occupiedNow`도 `true` (⏳ core #98 다음 PR)
+- 방 현황 `GET /api/rooms/status`도 걸린 예약 없이 막혀 있으면 `status: "BLOCKED"`와 `block`이 오고, `availableCount`에서 빠져요 (⏳ 같은 PR)
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
@@ -242,6 +249,7 @@
 | `PARTICIPANT_SUSPENDED` | 403 | 참여자 중 이용 정지 중인 사람이 있음 (누구인지는 안 알려 줌) |
 | `PARTICIPANT_NOT_FRIEND` | 403 | 참여자 중 대표자와 친구가 아닌 사람이 있음 (누구인지는 안 알려 줌, 11/6) |
 | `RESERVATION_TIME_TAKEN` | 409 | 그 방 그 시간에 이미 예약 |
+| `ROOM_BLOCKED` | 409 | 관리자가 막아 둔 칸 (Q-23, core #98). 메시지 예: "점검 중이라 3/5 14:00까지 예약할 수 없습니다". 즉시 시작·연장도 같아요 |
 | `OWNER_HAS_ACTIVE_RESERVATION` | 409 | 내가 대표자나 참여자로 들어간 끝나지 않은 예약이 이미 있음 (FR-RSV-003, 11/5) |
 | `PARTICIPANT_HAS_ACTIVE_RESERVATION` | 409 | 참여자 중 끝나지 않은 예약이 이미 있는 사람이 있음 (누구인지는 안 알려 줌, core #64) |
 | `PARTICIPANT_TIME_TAKEN` | 409 | 참여자가 같은 시간 다른 방 예약 중 |
@@ -452,6 +460,41 @@
 | `GET /api/penalties?days=30` | ✅ develop (core #75) | 경고·정지 목록 |
 | `GET /api/stats/usage?from=&to=` | ✅ develop (core #74, 알림 효과 #93) | 이용 통계 + 센서 값 + 알림 효과 |
 | `GET /api/reports/{id}/evidence` | ✅ develop (core #76) | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음). 방 카메라 자동 신고는 `reporter: null` |
+
+#### 기간 막기 `/api/admin/room-blocks` (Q-23, ⏳ core #98)
+
+공사·점검·대관으로 방을 일정 기간 예약 못 하게 막아요. 막힌 칸은 미리 예약·즉시 시작·연장이 모두 `409 ROOM_BLOCKED`예요.
+
+`POST /api/admin/room-blocks` → `201`
+```json
+{ "roomId": 5, "startAt": "2026-11-10T09:00:00+09:00", "endAt": "2026-11-10T12:00:00+09:00",
+  "reason": "INSPECTION", "memo": "에어컨 점검" }
+```
+```json
+{ "block": { "id": 1, "roomId": 5, "startAt": "2026-11-10T09:00:00+09:00", "endAt": "2026-11-10T12:00:00+09:00",
+             "reason": "INSPECTION", "memo": "에어컨 점검", "createdAt": "…", "releasedAt": null },
+  "conflicts": [{ "reservationId": 31, "roomId": 5, "startAt": "…", "endAt": "…", "people": 6,
+                  "status": "BOOKED", "cancelable": true }] }
+```
+
+| 주소 | 하는 일 |
+|---|---|
+| `GET /api/admin/room-blocks` | 안 끝났거나 끝난 지 30일 안인 막기, 시작 빠른 순 (풀린 것도 `releasedAt`과 함께) |
+| `POST /api/admin/room-blocks/{id}/release` | 풀기 → `block`. 이미 풀렸으면 그대로 `200` |
+| `GET /api/admin/room-blocks/{id}/conflicts` | 겹친 끝나지 않은 예약 (풀렸거나 끝난 막기면 `[]`) |
+| `POST /api/admin/room-blocks/{id}/cancel-conflicts` | 겹친 예약 중 시작 전(`cancelable: true`)만 취소 + 대표자·참여자 알림(`ROOM_BLOCKED`) → `{ "canceled": 1, "reservationIds": [31] }` |
+
+- `reason`: `CONSTRUCTION` 공사 · `INSPECTION` 점검 · `RENTAL` 대관 · `OTHER` 기타
+- 이미 잡힌 예약은 막을 때 지우지 않아요. 관리자가 목록을 보고 취소를 눌러야 취소돼요. 사용 중인 예약은 `cancelable: false`라 필요하면 강제 퇴실로
+- `memo`는 학생에게도 보여서 이름·학번은 적지 않아요
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `ROOM_BLOCK_INVALID` | 400 | 30분 칸이 아님, 끝 ≤ 시작, 이미 지난 기간, 31일 넘음, 메모 100자 넘음 |
+| `ADMIN_ONLY` | 403 | 관리자가 아님 |
+| `ROOM_NOT_FOUND` | 404 | 없는 방 |
+| `ROOM_BLOCK_NOT_FOUND` | 404 | 없는 막기 |
+| `ROOM_BLOCK_OVERLAP` | 409 | 같은 방의 풀리지 않은 막기와 겹침 |
 
 #### `GET /api/penalties?days=30` 경고·정지 목록
 
