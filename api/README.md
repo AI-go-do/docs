@@ -27,6 +27,8 @@
 | 화면 · 비서 | `POST /api/reservations/{id}/cancel` | 시작 전 취소 (즉시 시작은 누른 뒤 5분 안) | FR-RSV-007 | ✅ develop · 즉시 시작 예외 core #84 |
 | 화면 · 비서 | `POST /api/reservations/{id}/checkout` | 퇴실 | FR-RSV-008 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/continue` | 연장하기 (사용 중 이어 쓰기, 1회) | FR-RSV-105 | ✅ develop |
+| 화면 | `GET /api/relay/waits/me`, `POST /api/relay/waits`, `POST /api/relay/waits/{id}/cancel` | 빈방 릴레이: 차 있는 칸 기다리기 (1인 3개) | Q-18 | core (PR 대기) |
+| 화면 | `GET /api/relay/offers/me`, `POST /api/relay/offers/{id}/decline` | 빈방 릴레이: 나에게 넘어온 자리, 넘길게요 | Q-18 | core (PR 대기) |
 | 화면 | `POST /api/reservations/{id}/still-here` | 아직 있어요 (자리 비움 타이머 다시, 예약당 1번) | FR-DEV-103 | ✅ develop |
 | 관리자 | `GET /api/reservations/stats` | WEB/AGENT 예약 건수 | NFR-COM-008 | ✅ develop |
 | 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | ✅ develop |
@@ -246,7 +248,11 @@
 | `PARTICIPANT_HAS_ACTIVE_RESERVATION` | 409 | 참여자 중 끝나지 않은 예약이 이미 있는 사람이 있음 (누구인지는 안 알려 줌, core #64) |
 | `PARTICIPANT_TIME_TAKEN` | 409 | 참여자가 같은 시간 다른 방 예약 중 |
 | `IDEMPOTENCY_KEY_REUSED` | 409 | 같은 키를 다른 내용에 씀 |
+| `RELAY_HELD` | 409 | 빈방 릴레이로 기다리던 학생에게 5분 동안 넘겨 둔 자리 (Q-18). 지금 바로 쓰기·연장하기도 같음 |
+| `RELAY_OFFER_INVALID` | 409 | `relayOfferId`가 내 것이 아님·5분 지남·이미 받음·방이 다름·넘어온 구간 밖 |
 | `RESERVATION_BUSY` | 503 | 동시 요청이 몰림 (드묾). 잠시 후 다시 |
+
+빈방 릴레이로 나에게 넘어온 자리를 받을 때는 본문에 `"relayOfferId": 7`을 더 붙여요([5-3](#5-3-빈방-릴레이--모두-로그인-필요-q-18)). 넘어온 구간 안이면 일부만 잡아도 돼요. 참여자·인원·친구·정지·대표자 1건 규칙은 보통 예약과 같아요.
 
 만들기 직전에 지난 예약 정리(노쇼·자동 퇴실)를 한 번 돌려요. 그래서 입실 마감이 지난 예약 때문에 `409`가 나지 않아요.
 
@@ -530,6 +536,50 @@
 - 없거나 남의 알림이면 `404 NOTIFICATION_NOT_FOUND` (남의 알림이 있는지도 안 알려 줘요)
 
 `POST /api/notifications/read-all` 모두 읽음 → `200 { "count": 2 }` (이번에 읽음으로 바뀐 개수)
+
+## 5-3. 빈방 릴레이 — 모두 로그인 필요 (Q-18)
+
+차 있는 30분 칸에 "기다리기"를 걸어 두면, 그 칸을 덮는 예약이 취소될 때 먼저 기다린 사람에게 놓인 구간을 넘겨요(11/9 지영 확정).
+
+- 기다리기는 한 사람 동시에 **3개**까지. 칸마다 기다리는 팀 수는 제한 없고 선착순이에요
+- 취소되면 줄 첫 사람에게 **5분** 동안 잡아 둬요. 알림함에 `kind: "RELAY_OFFER"`, 제목 "기다리던 자리가 났어요"
+- 그 5분 동안은 넘겨받은 사람만 그 구간을 예약할 수 있어요(다른 사람은 `409 RELAY_HELD`)
+- [넘길게요]를 누르거나 5분이 지나면 다음 사람에게 가요(5분 지남은 1분 정리가 처리)
+- 받기는 `POST /api/reservations`에 `relayOfferId`를 붙여서. 받은 사람이 대표자이고 보통 예약 규칙 그대로예요. 하나를 받으면 내 다른 기다리기·넘김은 풀려요
+- 시작 **30분 전**부터 취소된 자리는 넘기지 않고 그냥 빈 칸이에요. 기다리기도 시작 30분 전까지만 걸 수 있어요
+- 받은 예약도 노쇼 규칙은 보통과 같아요
+- 숫자 3·5·30은 설정값(`mspace.reservation.relay`)
+
+`GET /api/relay/waits/me` 내 기다리기 (줄 서 있는 것, 시작 전) → `200`
+```json
+[{ "id": 3, "roomId": 1, "startAt": "2026-11-12T14:00:00+09:00", "order": 2 }]
+```
+`order`는 그 칸 줄에서 내 순서(1 = 맨 앞)예요.
+
+`POST /api/relay/waits` 기다리기 걸기 → `200` (위 한 줄 모양. 같은 칸에 이미 걸었으면 그것을 그대로)
+```json
+{ "roomId": 1, "startAt": "2026-11-12T14:00:00+09:00" }
+```
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | 빠진 값, 칸 시작(정각·30분)이 아님 |
+| `RESERVATION_OUT_OF_RANGE` | 400 | 7일 밖 |
+| `ROOM_NOT_FOUND` | 404 | 없거나 쓸 수 없는 방 |
+| `RELAY_SLOT_FREE` | 409 | 그 칸이 비어 있음(바로 예약하면 됨), 또는 내가 들어 있는 예약 |
+| `RELAY_WAIT_LIMIT` | 409 | 기다리기가 이미 3개 |
+| `RELAY_TOO_LATE` | 409 | 시작 30분 전부터 |
+
+`POST /api/relay/waits/{id}/cancel` 그만 기다리기 → `204` (없거나 이미 끝났으면 `404 RELAY_WAIT_NOT_FOUND`)
+
+`GET /api/relay/offers/me` 나에게 넘어온 자리 (5분이 남은 것) → `200`
+```json
+[{ "id": 7, "roomId": 1, "startAt": "2026-11-12T14:00:00+09:00", "endAt": "2026-11-12T15:00:00+09:00",
+   "expiresAt": "2026-11-12T10:15:00+09:00", "order": 1 }]
+```
+화면은 `expiresAt`까지 남은 시간을 보여 주고, [받기]는 이 구간으로 예약 만들기 화면을 채워 `relayOfferId: 7`과 함께 보내요.
+
+`POST /api/relay/offers/{id}/decline` 넘길게요 → `204` (내 것이 아니거나 이미 끝났으면 `404 RELAY_OFFER_NOT_FOUND`)
 
 ## 6. 출입 (키패드 · QR)
 
