@@ -44,7 +44,7 @@
 | 화면 | `POST /api/notifications/read-all` | 내 알림 모두 읽음 | FR-NTF-103 | ✅ develop |
 | 키패드·QR | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 (문 앞 웹캠 QR도 같은 API) | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 (CO2에 온도·습도 선택) | FR-DEV-101~104 | ✅ develop · 온도·습도 core #97 |
-| 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·재실 + 지난 N분 1분 값 | Q-21 | core #97 |
+| 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·조도·PIR·재실 + 지난 N분 1분 값 | Q-21 | core #97, #106 |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
 | 화면 | `GET /api/penalties/me` | 내 경고 횟수·정지 ("내 경고 0회") | FR-WEB-003 · FR-RPT-104 | ✅ develop (core #92) |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
@@ -688,7 +688,7 @@ CO2:
 | `roomId` · `deviceId` | 정수 · 글자 50자 이하 | 방 번호, 보낸 장치(`sensor-방번호`) |
 | `kind` | `OCCUPANCY` 또는 `CO2` | 재실 / CO2 |
 | `occupied` | 참/거짓 (재실) | 장치가 센서들을 합친 판단. 하나라도 "있음"이면 `true` (FR-DEV-103) |
-| `sources` | 객체, 선택 (재실) | 센서별 값(`pir`, `radar`, `light`). core는 판단에 안 쓰고 기록만 해요 (PIR·레이더 정확도 비교용) |
+| `sources` | 객체, 선택 (재실) | 센서별 값(`pir`, `radar`, `light`). core는 판단에 안 써요. 재실이 바뀐 이벤트는 기록하고, `light`(0~1023 숫자)·`pir`(참/거짓)의 최신 값은 매번 관리자 "지금" 탭에 보여 줘요(서버 메모리, core #106). 카메라 방은 카메라 재실 이벤트에 실려 와요 |
 | `ppm` · `source` | 정수 0~10000 · 글자, 선택 (CO2) | CO2 농도, 센서 이름 |
 | `temperatureC` · `humidityPct` | 숫자, 선택 (CO2만) | SCD40이 같이 재는 온도(-40~85℃)·습도(0~100%). 소수 한 자리로 저장. 안 보내도 돼요(관리자 "지금" 탭, Q-21) |
 | `observedAt` | 시각 `+09:00` | 센서가 본 시각. 10·15분 타이머와 CO2 3분 판단은 받은 시각이 아니라 이 시각으로 재요. 장치는 인터넷 시계(NTP)를 맞춘 뒤에만 보내요 |
@@ -726,6 +726,8 @@ CO2:
       "presence": "OCCUPIED", "lastSignalAt": "2026-11-09T14:41:05+09:00", "offline": false,
       "co2": { "ppm": 915, "at": "2026-11-09T14:40:30+09:00" },
       "temperatureC": 25.4, "humidityPct": 47.0,
+      "light": { "raw": 512, "at": "2026-11-09T14:41:05+09:00" },
+      "pir": { "detected": true, "at": "2026-11-09T14:41:05+09:00" },
       "series": [ { "at": "2026-11-09T13:42:00+09:00", "ppm": 620, "temperatureC": 24.9, "humidityPct": 45.0 },
                   { "at": "2026-11-09T13:43:00+09:00", "ppm": null, "temperatureC": null, "humidityPct": null } ],
       "current": { "reservationId": 12, "startAt": "…14:00+09:00", "endAt": "…16:00+09:00", "people": 4 },
@@ -738,6 +740,8 @@ CO2:
 | `lastSignalAt` · `offline` | 재실·CO2 중 마지막으로 받은 시각, 그게 1분보다 오래됐거나 없으면 `offline: true` |
 | `co2` | 가장 최근 CO2 값 (창 밖이어도 마지막 값). 한 번도 없으면 `null` |
 | `temperatureC` · `humidityPct` | 값이 있는 가장 최근 온도·습도. 없으면 `null` |
+| `light` | 조도 센서 **원시값 0~1023**(lux 아님. 우노 `analogRead(A0)`, CDS + 10kΩ 분압, 밝을수록 큼)과 받은 시각. 재실 이벤트 `sources.light`의 최신 값, 지난 `minutes`분 안에 없으면 `null`. 보여 주기만 해요 |
+| `pir` | PIR 움직임 감지(`detected`)와 받은 시각. 재실 이벤트 `sources.pir`의 최신 값, 없으면 `null` |
 | `series` | 1분마다 한 줄, 오래된 것이 앞, 지금 진행 중인 분까지 `minutes`줄. 그 분에 값이 없으면 `null`. ppm은 정수, 온도·습도는 소수 한 자리 평균 |
 | `current` | 지금 시각을 낀 예약(입실 전 포함). `people`은 예약 인원. 없으면 `null` |
 | `next` | 지금 뒤 가장 가까운 예약. 없으면 `null` |
