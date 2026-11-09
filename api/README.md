@@ -41,7 +41,8 @@
 | 화면 | `POST /api/notifications/{id}/read` | 알림 하나 읽음 | FR-NTF-103 | ✅ develop |
 | 화면 | `POST /api/notifications/read-all` | 내 알림 모두 읽음 | FR-NTF-103 | ✅ develop |
 | 키패드·QR | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 (문 앞 웹캠 QR도 같은 API) | FR-ACC-001 | ✅ develop |
-| 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 | FR-DEV-101~104 | ✅ develop |
+| 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 (CO2에 온도·습도 선택) | FR-DEV-101~104 | ✅ develop · 온도·습도 core #97 |
+| 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·재실 + 지난 N분 1분 값 | Q-21 | core #97 |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
 | 화면 | `GET /api/penalties/me` | 내 경고 횟수·정지 ("내 경고 0회") | FR-WEB-003 · FR-RPT-104 | ✅ develop (core #92) |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
@@ -634,7 +635,8 @@
 CO2:
 ```json
 { "eventId": "9a0e3f55-1b2c-4d6e-8f90-a1b2c3d4e5f6", "roomId": 2, "deviceId": "sensor-2",
-  "kind": "CO2", "ppm": 1080, "source": "scd40", "observedAt": "2026-11-05T14:06:00+09:00" }
+  "kind": "CO2", "ppm": 1080, "source": "scd40", "temperatureC": 25.4, "humidityPct": 47,
+  "observedAt": "2026-11-05T14:06:00+09:00" }
 ```
 
 | 필드 | 형식 | 뜻 |
@@ -645,6 +647,7 @@ CO2:
 | `occupied` | 참/거짓 (재실) | 장치가 센서들을 합친 판단. 하나라도 "있음"이면 `true` (FR-DEV-103) |
 | `sources` | 객체, 선택 (재실) | 센서별 값(`pir`, `radar`, `light`). core는 판단에 안 쓰고 기록만 해요 (PIR·레이더 정확도 비교용) |
 | `ppm` · `source` | 정수 0~10000 · 글자, 선택 (CO2) | CO2 농도, 센서 이름 |
+| `temperatureC` · `humidityPct` | 숫자, 선택 (CO2만) | SCD40이 같이 재는 온도(-40~85℃)·습도(0~100%). 소수 한 자리로 저장. 안 보내도 돼요(관리자 "지금" 탭, Q-21) |
 | `observedAt` | 시각 `+09:00` | 센서가 본 시각. 10·15분 타이머와 CO2 3분 판단은 받은 시각이 아니라 이 시각으로 재요. 장치는 인터넷 시계(NTP)를 맞춘 뒤에만 보내요 |
 
 **언제 보내나**
@@ -661,13 +664,43 @@ CO2:
 
 | 오류 | 상태 | 언제 | 장치 동작 |
 |---|---|---|---|
-| `INVALID_REQUEST` | 400 | 빠진 값, 없는 방 번호(`roomId`), 모르는 `kind`, `ppm` 범위 밖, 오프셋 없는 시각, 5분 넘게 미래인 시각 | 그 이벤트만 버려요 |
+| `INVALID_REQUEST` | 400 | 빠진 값, 없는 방 번호(`roomId`), 모르는 `kind`, `ppm`·온도·습도 범위 밖, 재실 이벤트에 온도·습도, 오프셋 없는 시각, 5분 넘게 미래인 시각 | 그 이벤트만 버려요 |
 | `DEVICE_UNAUTHORIZED` | 401 | 장치 토큰 없음·틀림 | 이벤트를 모아 둔 채 간격을 늘려 다시 보내요(설정 문제라 고치면 이어서 보냄) |
 | `DEVICE_ROOM_MISMATCH` · `DEVICE_ID_MISMATCH` | 403 | 토큰에 등록된 방·장치와 `roomId`·`deviceId`가 다름 (6장 "장치 토큰") | 401과 같음 (설정 실수) |
 | `5xx`, 연결 실패 | - | 서버 문제 | 같은 `eventId`로 다시 보내요 (1→2→4…30초) |
 
 정할 것:
 - API 게이트웨이: 장치 토큰은 JWT가 아니라서 `/api/sensor-events`를 `/api/access/verify`처럼 공개 경로로 넣기 (재웅)
+
+### `GET /api/admin/rooms/environment?minutes=60` 관리자 "지금" 탭 — 관리자만
+
+관리자 화면 "지금" 탭(Q-21)이 10초마다 불러요. 방마다 지금 값과 지난 `minutes`분(기본 60, 1~180)의 1분 평균을 줘요. 관리자가 아니면 `403 ADMIN_ONLY`, `minutes` 범위 밖이면 `400 INVALID_REQUEST`.
+
+```json
+{ "now": "2026-11-09T14:41:10+09:00", "minutes": 60,
+  "rooms": [
+    { "roomId": 1, "roomName": "창작실 1",
+      "presence": "OCCUPIED", "lastSignalAt": "2026-11-09T14:41:05+09:00", "offline": false,
+      "co2": { "ppm": 915, "at": "2026-11-09T14:40:30+09:00" },
+      "temperatureC": 25.4, "humidityPct": 47.0,
+      "series": [ { "at": "2026-11-09T13:42:00+09:00", "ppm": 620, "temperatureC": 24.9, "humidityPct": 45.0 },
+                  { "at": "2026-11-09T13:43:00+09:00", "ppm": null, "temperatureC": null, "humidityPct": null } ],
+      "current": { "reservationId": 12, "startAt": "…14:00+09:00", "endAt": "…16:00+09:00", "people": 4 },
+      "next": { "startAt": "…16:30+09:00", "people": 3 } } ] }
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `presence` | 재실 `OCCUPIED`·`EMPTY`. 재실 신호가 1분(`offline-after-seconds`) 넘게 없거나 한 번도 없으면 `UNKNOWN` (방 현황과 같은 기준) |
+| `lastSignalAt` · `offline` | 재실·CO2 중 마지막으로 받은 시각, 그게 1분보다 오래됐거나 없으면 `offline: true` |
+| `co2` | 가장 최근 CO2 값 (창 밖이어도 마지막 값). 한 번도 없으면 `null` |
+| `temperatureC` · `humidityPct` | 값이 있는 가장 최근 온도·습도. 없으면 `null` |
+| `series` | 1분마다 한 줄, 오래된 것이 앞, 지금 진행 중인 분까지 `minutes`줄. 그 분에 값이 없으면 `null`. ppm은 정수, 온도·습도는 소수 한 자리 평균 |
+| `current` | 지금 시각을 낀 예약(입실 전 포함). `people`은 예약 인원. 없으면 `null` |
+| `next` | 지금 뒤 가장 가까운 예약. 없으면 `null` |
+
+- 젯슨 예측(`forecast`)은 아직 없어요. 화면은 없으면 최근 추세로 그려요
+- 방 안 사람 수(카메라)는 Q-17 결정 전이라 주지 않아요
 
 ## 6-3. 퇴실 뒤 정리 확인 (방 카메라, FR-DEV-105)
 
