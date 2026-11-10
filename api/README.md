@@ -54,8 +54,8 @@
 | 키패드·QR | `POST /api/device-faults` | 장치 오류 구간·그동안 눌린 번호 알리기 → 장치 탓 노쇼 자동 무르기 | Q-19 | ✅ develop (core #99) |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
 | 화면 | `GET /api/penalties/me` | 내 경고 횟수·정지 ("내 경고 0회") | FR-WEB-003 · FR-RPT-104 | ✅ develop (core #92) |
-| 화면 | `GET /api/penalties/me/warnings` | 내 경고 목록 + 철회 요청 상태 (내 예약 "경고 철회 요청 (N일 남음)") | FR-RPT-105 | ⏳ core 요청 |
-| 화면 | `POST /api/warnings/{id}/appeal` | 경고 철회 요청 (받은 뒤 7일 안, 1번) → AI가 다시 비교 | FR-RPT-105 | ⏳ core 요청 |
+| 화면 | `GET /api/penalties/me/warnings` | 내 경고 목록 + 철회 요청 상태 (내 예약 "경고 철회 요청 (N일 남음)") | FR-RPT-105 | ⏳ core #111 요청 |
+| 화면 | `POST /api/warnings/{id}/appeal` | 경고 철회 요청 (받은 뒤 7일 안, 1번) → AI가 다시 비교 | FR-RPT-105 | ⏳ core #111 요청 |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
 | 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT-101 | ✅ develop (assistant) |
 | 화면 | `DELETE /api/agent/chat/history` | 새 대화 (서버가 기억한 대화 지우기) | FR-AGT-101 | ✅ develop (assistant) |
@@ -727,7 +727,7 @@
 | `suspendedUntil` | 이용 정지(예약·참여, 노쇼 누적 포함) 중이면 끝나는 시각(`+09:00`), 아니면 `null` |
 | `reportSuspendedUntil` | 신고 정지 중이면 끝나는 시각, 아니면 `null` |
 
-### 경고 철회 요청 — 로그인 필요 (FR-RPT-105, ⏳ core 요청 · 모양 제안)
+### 경고 철회 요청 — 로그인 필요 (FR-RPT-105, ⏳ core #111 요청 · 모양 제안)
 
 억울한 경고를 받은 학생이 7일 안에 철회를 요청하고, **AI가 근거를 다시 비교**해 철회·유지를 정해요(11/10 재웅: 관리자는 정하지 않음). 아래는 web이 쓰려는 모양 제안이고, 실제 모양은 core(지영)가 정해요. 세부 규칙은 요구사항 Q-24.
 
