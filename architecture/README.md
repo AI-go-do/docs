@@ -115,7 +115,7 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
 | 중계 gateway.py | `mspace-device` | Python | 입력을 `POST /api/access/verify`로 전달. 나중에 Jetson 보드 B로 옮김 |
 | 재실 센서 (v0.2) | `mspace-device` | PIR · 조도 · CO2 (레이더는 8차 회의에서 환불) | 빈 방 판단 보조 |
 | 방 카메라 (젯슨 보드 B) | `mspace-device` `room_camera.py` | 웹캠 · YOLO | 퇴실 뒤 정리 확인(FR-DEV-105, 물건 이름만 core로). 사람 수도 세어 재실 이벤트 `sources.people`로 보냄(Q-17 결정 대기). 화면은 저장·전송하지 않음 |
-| Gemini / Ollama | (외부) | `LlmClient` 포트 + 어댑터 2개 | Gemini(`gemini-3.5-flash-lite`)는 시연용, Ollama는 로컬(보드 B 후보). 둘 다 develop에 있음. 학번은 모델로 보내지 않음 |
+| Gemini / Ollama | (외부) | `LlmClient` 포트 + 어댑터 2개 | Gemini(`gemini-3.5-flash-lite`)는 시연용, Ollama는 로컬(보드 A, 11/10 변경). 둘 다 develop에 있음. 학번은 모델로 보내지 않음 |
 | GitHub Actions → GHCR | 각 저장소 `.github` | Actions · GHCR | 빌드·테스트 → 이미지(amd64 · arm64) → SSH로 학교 서버에 배포. `DEPLOY_ENABLED=true`(11-05)라 develop에 합치면 개발 서버에 자동 반영 ([인프라 · CI/CD](../infra/infra-cicd.md)) |
 
 ## AI 비서는 저장소 하나, 컨테이너 둘 (v0.3)
