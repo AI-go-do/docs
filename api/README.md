@@ -33,13 +33,18 @@
 | 관리자 | `GET /api/reports?verdict=OPEN` | 신고 목록 | FR-RPT-103 | ✅ develop |
 | 관리자 | `POST /api/reports/{id}/judge` | 신고 판정 + 경고·정지·알림 | FR-RPT-103·104 | ✅ develop |
 | 관리자 | `POST /api/reservations/{id}/force-checkout` | 강제 퇴실 (퇴출) | FR-RPT-104 | ✅ develop |
-| 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 | FR-WEB-101 | ✅ develop (core #76) |
+| 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 + 앞 예약 방 카메라 결과(`previous.tidyCheck`) | FR-WEB-101 | ✅ develop (core #76, #110) |
+| 관리자 | `GET /api/tidy-checks?days=7` | 방 카메라 정리 확인 목록 | FR-DEV-105 | ✅ develop (core #110) |
 | 관리자 | `GET /api/penalties?days=30` | 경고·정지 목록 | FR-WEB-101 | ✅ develop |
+| 관리자 | `GET`·`POST /api/admin/room-blocks` | 기간 막기 목록·만들기 (공사·점검·대관) | Q-23 | ✅ develop (core #98) |
+| 관리자 | `POST /api/admin/room-blocks/{id}/release`, `GET …/conflicts`, `POST …/cancel-conflicts` | 풀기, 겹친 예약 보기, 겹친 예약 취소 + 알림 | Q-23 | ✅ develop (core #98) |
 | 관리자 | `GET /api/stats/usage?from=&to=` | 이용 통계 (이용률·노쇼율·시간대·센서·알림 효과) | FR-WEB-101 | ✅ develop · 알림 효과 core #93 |
 | 화면 | `GET /api/notifications/me` | 내 알림함 (최근 50개, 읽음 여부) | FR-NTF-103 | ✅ develop |
 | 화면 | `GET /api/notifications/me/unread-count` | 안 읽은 알림 개수 (종 아이콘 점) | FR-NTF-103 | ✅ develop |
 | 화면 | `POST /api/notifications/{id}/read` | 알림 하나 읽음 | FR-NTF-103 | ✅ develop |
 | 화면 | `POST /api/notifications/read-all` | 내 알림 모두 읽음 | FR-NTF-103 | ✅ develop |
+| 화면 | `GET /api/room-watches/me` | 오늘 켜 둔 빈방 알림 | 11/9 지영 | ✅ develop (core #109) |
+| 화면 | `POST /api/room-watches`, `POST /api/room-watches/{roomId}/cancel` | 빈방 알림 켜기·끄기 (그 방이 비면 알림 한 번) | 11/9 지영 | ✅ develop (core #109) |
 | 키패드·QR | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 (문 앞 웹캠 QR도 같은 API) | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 (CO2에 온도·습도 선택) | FR-DEV-101~104 | ✅ develop · 온도·습도 core #97 |
 | 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·재실 + 지난 N분 1분 값 | Q-21 | core #97 |
@@ -152,10 +157,15 @@
   "date": "2026-11-03", "slotMinutes": 30,
   "rooms": [
     { "roomId": 1, "roomName": "1번 방", "minPeople": 3, "maxPeople": 5,
-      "slots": [ { "startAt": "2026-11-03T14:00:00+09:00", "endAt": "2026-11-03T14:30:00+09:00", "available": true } ] }
+      "occupiedNow": false, "blockedNow": null,
+      "slots": [ { "startAt": "2026-11-03T14:00:00+09:00", "endAt": "2026-11-03T14:30:00+09:00", "available": true,
+                   "block": null } ] }
   ]
 }
 ```
+
+- 관리자가 막은 칸(Q-23)은 `available: false`에 `block: { "reason": "INSPECTION", "memo": "에어컨 점검", "endAt": "…" }`이 붙어요. 지금 막혀 있는 방은 `blockedNow`에 같은 모양, `occupiedNow`도 `true` (⏳ core #98 다음 PR)
+- 방 현황 `GET /api/rooms/status`도 걸린 예약 없이 막혀 있으면 `status: "BLOCKED"`와 `block`이 오고, `availableCount`에서 빠져요 (⏳ 같은 PR)
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
@@ -243,6 +253,7 @@
 | `PARTICIPANT_SUSPENDED` | 403 | 참여자 중 이용 정지 중인 사람이 있음 (누구인지는 안 알려 줌) |
 | `PARTICIPANT_NOT_FRIEND` | 403 | 참여자 중 대표자와 친구가 아닌 사람이 있음 (누구인지는 안 알려 줌, 11/6) |
 | `RESERVATION_TIME_TAKEN` | 409 | 그 방 그 시간에 이미 예약 |
+| `ROOM_BLOCKED` | 409 | 관리자가 막아 둔 칸 (Q-23, core #98). 메시지 예: "점검 중이라 3/5 14:00까지 예약할 수 없습니다". 즉시 시작·연장도 같아요 |
 | `OWNER_HAS_ACTIVE_RESERVATION` | 409 | 내가 대표자나 참여자로 들어간 끝나지 않은 예약이 이미 있음 (FR-RSV-003, 11/5) |
 | `PARTICIPANT_HAS_ACTIVE_RESERVATION` | 409 | 참여자 중 끝나지 않은 예약이 이미 있는 사람이 있음 (누구인지는 안 알려 줌, core #64) |
 | `PARTICIPANT_TIME_TAKEN` | 409 | 참여자가 같은 시간 다른 방 예약 중 |
@@ -452,7 +463,42 @@
 |---|---|---|
 | `GET /api/penalties?days=30` | ✅ develop (core #75) | 경고·정지 목록 |
 | `GET /api/stats/usage?from=&to=` | ✅ develop (core #74, 알림 효과 #93) | 이용 통계 + 센서 값 + 알림 효과 |
-| `GET /api/reports/{id}/evidence` | ✅ develop (core #76) | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음). 방 카메라 자동 신고는 `reporter: null` |
+| `GET /api/reports/{id}/evidence` | ✅ develop (core #76) | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음). 방 카메라 자동 신고는 `reporter: null`. `previous.tidyCheck`는 그 예약이 끝난 뒤 방 카메라 결과 `{result, items, leftItems, observedAt}`, 없으면 `null` (core #110) |
+
+#### 기간 막기 `/api/admin/room-blocks` (Q-23, core #98)
+
+공사·점검·대관으로 방을 일정 기간 예약 못 하게 막아요. 막힌 칸은 미리 예약·즉시 시작·연장이 모두 `409 ROOM_BLOCKED`예요.
+
+`POST /api/admin/room-blocks` → `201`
+```json
+{ "roomId": 5, "startAt": "2026-11-10T09:00:00+09:00", "endAt": "2026-11-10T12:00:00+09:00",
+  "reason": "INSPECTION", "memo": "에어컨 점검" }
+```
+```json
+{ "block": { "id": 1, "roomId": 5, "startAt": "2026-11-10T09:00:00+09:00", "endAt": "2026-11-10T12:00:00+09:00",
+             "reason": "INSPECTION", "memo": "에어컨 점검", "createdAt": "…", "releasedAt": null },
+  "conflicts": [{ "reservationId": 31, "roomId": 5, "startAt": "…", "endAt": "…", "people": 6,
+                  "status": "BOOKED", "cancelable": true }] }
+```
+
+| 주소 | 하는 일 |
+|---|---|
+| `GET /api/admin/room-blocks` | 안 끝났거나 끝난 지 30일 안인 막기, 시작 빠른 순 (풀린 것도 `releasedAt`과 함께) |
+| `POST /api/admin/room-blocks/{id}/release` | 풀기 → `block`. 이미 풀렸으면 그대로 `200` |
+| `GET /api/admin/room-blocks/{id}/conflicts` | 겹친 끝나지 않은 예약 (풀렸거나 끝난 막기면 `[]`) |
+| `POST /api/admin/room-blocks/{id}/cancel-conflicts` | 겹친 예약 중 시작 전(`cancelable: true`)만 취소 + 대표자·참여자 알림(`ROOM_BLOCKED`) → `{ "canceled": 1, "reservationIds": [31] }` |
+
+- `reason`: `CONSTRUCTION` 공사 · `INSPECTION` 점검 · `RENTAL` 대관 · `OTHER` 기타
+- 이미 잡힌 예약은 막을 때 지우지 않아요. 관리자가 목록을 보고 취소를 눌러야 취소돼요. 사용 중인 예약은 `cancelable: false`라 필요하면 강제 퇴실로
+- `memo`는 학생에게도 보여서 이름·학번은 적지 않아요
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `ROOM_BLOCK_INVALID` | 400 | 30분 칸이 아님, 끝 ≤ 시작, 이미 지난 기간, 31일 넘음, 메모 100자 넘음 |
+| `ADMIN_ONLY` | 403 | 관리자가 아님 |
+| `ROOM_NOT_FOUND` | 404 | 없는 방 |
+| `ROOM_BLOCK_NOT_FOUND` | 404 | 없는 막기 |
+| `ROOM_BLOCK_OVERLAP` | 409 | 같은 방의 풀리지 않은 막기와 겹침 |
 
 #### `GET /api/penalties?days=30` 경고·정지 목록
 
@@ -531,6 +577,33 @@
 - 없거나 남의 알림이면 `404 NOTIFICATION_NOT_FOUND` (남의 알림이 있는지도 안 알려 줘요)
 
 `POST /api/notifications/read-all` 모두 읽음 → `200 { "count": 2 }` (이번에 읽음으로 바뀐 개수)
+
+알림 종류(`kind`) 중 11/9에 더한 것
+
+| kind | 누구에게 | 제목 · 본문 예 | core |
+|---|---|---|---|
+| `RESERVATION_INVITED` | 대표자를 뺀 참여자 모두. 미리 예약·즉시 시작이 새로 만들어질 때 (같은 멱등 키 재생·연장은 안 보냄) | "함께 쓰는 예약이 생겼어요" · "홍*동님이 11/10(화) 15:00–17:00 2번 방에 함께 예약했어요." 자정을 넘기면 끝에도 날짜. 대표자 이름은 가려서, 학번·입실 번호는 안 넣어요 | #108 |
+| `ROOM_FREE` | 빈방 알림을 켠 사람 (아래 5-4) | "2번 방이 비었어요" · "지켜보던 2번 방이 지금 비었어요. 바로 쓰려면 [지금 바로 쓰기]를 눌러 주세요." `reservationId`는 `null` | #109 |
+
+## 5-4. 빈방 알림 — 모두 로그인 필요 (core #109, 11/9 지영)
+
+지금 쓰이는 방을 "비면 알려 줘"로 켜 두면, 그 방이 비었을 때 알림함에 `ROOM_FREE`가 한 번 와요.
+
+- **"비었다":** 지금 시각을 덮는 `BOOKED`·`IN_USE` 예약도, 풀리지 않은 관리자 막기도 없음. `GET /api/rooms/status`의 지금 비었는지와 같은 기준이에요. 센서 재실은 안 봐요
+- **언제:** 1분 정리가 확인해서 늦어도 1분 안에 와요
+- **하루만, 한 번만:** 켠 날(서울 날짜) 안에서만, 한 번 알리면 꺼져요. 같은 방을 두 번 켜도 하나예요
+
+| 메서드 · 주소 | 하는 일 · 응답 |
+|---|---|
+| `GET /api/room-watches/me` | 오늘 켜 둔 방 → `200 [{ "roomId": 2, "since": "2026-11-09T14:10:00+09:00" }]` |
+| `POST /api/room-watches` `{ "roomId": 2 }` | 켜기 → `200 { "roomId": 2, "since": "…+09:00" }` (이미 켜져 있어도 200) |
+| `POST /api/room-watches/{roomId}/cancel` | 끄기 → `204` (켜져 있지 않아도 204) |
+
+| 코드 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | `roomId`가 없음 |
+| `ROOM_NOT_FOUND` | 404 | 없는 방 |
+| `ROOM_WATCH_FREE` | 409 | 지금 비어 있음 (켤 필요 없이 바로 예약하면 돼요) |
 
 ## 6. 출입 (키패드 · QR)
 
@@ -646,7 +719,7 @@ CO2:
 | `roomId` · `deviceId` | 정수 · 글자 50자 이하 | 방 번호, 보낸 장치(`sensor-방번호`) |
 | `kind` | `OCCUPANCY` 또는 `CO2` | 재실 / CO2 |
 | `occupied` | 참/거짓 (재실) | 장치가 센서들을 합친 판단. 하나라도 "있음"이면 `true` (FR-DEV-103) |
-| `sources` | 객체, 선택 (재실) | 센서별 값(`pir`, `radar`, `light`). core는 판단에 안 쓰고 기록만 해요 (PIR·레이더 정확도 비교용) |
+| `sources` | 객체, 선택 (재실) | 센서별 값(`pir`, `radar`, `light`). core는 판단에 안 써요. 재실이 바뀐 이벤트는 기록하고, `light`(0~1023 숫자)·`pir`(참/거짓)의 최신 값은 매번 관리자 "지금" 탭에 보여 줘요(서버 메모리, core #106). 카메라 방은 카메라 재실 이벤트에 실려 와요 |
 | `ppm` · `source` | 정수 0~10000 · 글자, 선택 (CO2) | CO2 농도, 센서 이름 |
 | `temperatureC` · `humidityPct` | 숫자, 선택 (CO2만) | SCD40이 같이 재는 온도(-40~85℃)·습도(0~100%). 소수 한 자리로 저장. 안 보내도 돼요(관리자 "지금" 탭, Q-21) |
 | `observedAt` | 시각 `+09:00` | 센서가 본 시각. 10·15분 타이머와 CO2 3분 판단은 받은 시각이 아니라 이 시각으로 재요. 장치는 인터넷 시계(NTP)를 맞춘 뒤에만 보내요 |
@@ -684,6 +757,8 @@ CO2:
       "presence": "OCCUPIED", "lastSignalAt": "2026-11-09T14:41:05+09:00", "offline": false,
       "co2": { "ppm": 915, "at": "2026-11-09T14:40:30+09:00" },
       "temperatureC": 25.4, "humidityPct": 47.0,
+      "light": { "raw": 512, "at": "2026-11-09T14:41:05+09:00" },
+      "pir": { "detected": true, "at": "2026-11-09T14:41:05+09:00" },
       "series": [ { "at": "2026-11-09T13:42:00+09:00", "ppm": 620, "temperatureC": 24.9, "humidityPct": 45.0 },
                   { "at": "2026-11-09T13:43:00+09:00", "ppm": null, "temperatureC": null, "humidityPct": null } ],
       "current": { "reservationId": 12, "startAt": "…14:00+09:00", "endAt": "…16:00+09:00", "people": 4 },
@@ -696,6 +771,8 @@ CO2:
 | `lastSignalAt` · `offline` | 재실·CO2 중 마지막으로 받은 시각, 그게 1분보다 오래됐거나 없으면 `offline: true` |
 | `co2` | 가장 최근 CO2 값 (창 밖이어도 마지막 값). 한 번도 없으면 `null` |
 | `temperatureC` · `humidityPct` | 값이 있는 가장 최근 온도·습도. 없으면 `null` |
+| `light` | 조도 센서 **원시값 0~1023**(lux 아님. 우노 `analogRead(A0)`, CDS + 10kΩ 분압, 밝을수록 큼)과 받은 시각. 재실 이벤트 `sources.light`의 최신 값, 지난 `minutes`분 안에 없으면 `null`. 보여 주기만 해요 |
+| `pir` | PIR 움직임 감지(`detected`)와 받은 시각. 재실 이벤트 `sources.pir`의 최신 값, 없으면 `null` |
 | `series` | 1분마다 한 줄, 오래된 것이 앞, 지금 진행 중인 분까지 `minutes`줄. 그 분에 값이 없으면 `null`. ppm은 정수, 온도·습도는 소수 한 자리 평균 |
 | `current` | 지금 시각을 낀 예약(입실 전 포함). `people`은 예약 인원. 없으면 `null` |
 | `next` | 지금 뒤 가장 가까운 예약. 없으면 `null` |
@@ -767,7 +844,7 @@ CO2:
 
 - API 게이트웨이: 장치 토큰은 JWT가 아니라서 `/api/rooms/{roomId}/current`, `/api/rooms/{roomId}/tidy-checks`도 `/api/sensor-events`처럼 공개 경로로 넣어야 해요. 장치 토큰은 core가 확인해요 (재웅)
 
-### `GET /api/tidy-checks?days=7` 정리 확인 목록 — 관리자만 (⏳ 다음 PR, core #81 다음)
+### `GET /api/tidy-checks?days=7` 정리 확인 목록 — 관리자만 (✅ develop, core #110)
 
 최근 N일(1~92, 기본 7) 결과를 최근 순으로 줘요. 관리자가 아니면 `403 ADMIN_ONLY`.
 
@@ -779,7 +856,7 @@ CO2:
 ```
 
 - 신고 목록(`GET /api/reports`)에 자동 신고는 `source: "CAMERA"`, 사람 신고는 `source: "USER"`로 나와요(core #81). 카메라 신고는 신고자가 없어서 `reporterReservationId`가 `null`이에요.
-- ⏳ 다음 PR: 신고 증거(`GET /api/reports/{id}/evidence`, core #76)의 앞 예약 칸에도 같은 결과를 `tidyCheck`로 붙여요(없으면 `null`). 사람이 어질러짐을 신고하면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
+- 신고 증거(`GET /api/reports/{id}/evidence`)의 앞 예약 칸에도 같은 결과를 `tidyCheck`로 붙여요(없으면 `null`, core #110). 예: `"tidyCheck": {"result": "CLEAN", "items": ["chair"], "leftItems": ["BAG"], "observedAt": "2026-11-09T14:53:00+09:00"}`. 사람이 어질러짐을 신고하면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
 
 ## 6-4. 장치 오류 · 방의 사과 (Q-19, ⏳ core #99)
 
