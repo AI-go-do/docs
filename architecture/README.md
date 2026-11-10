@@ -146,19 +146,19 @@ v0.1은 아래 다섯 가지를 **순서대로** 만들어요. 위 그림 중 �
 | 브라우저 → agent (v0.3) | `/api/agent/...` → 게이트웨이 → agent (core를 거치지 않음) |
 | agent → 모델 | `LlmClient` 포트 (Gemini API / Ollama) |
 
-## 그림과 코드가 아직 다른 곳 (2026-11-06 점검)
+## 그림과 코드가 아직 다른 곳 (2026-11-06 점검, 11-10 core 줄 다시 확인)
 
 11-04 표의 게이트웨이 · 비서 채팅 · Ollama · 채팅 가리기 · refresh 쿠키는 모두 develop에 머지돼 지웠어요.
 
 | 어디 | 지금 | 맞추는 법 | 누가 |
 |---|---|---|---|
 | 그림 파일 | `mspace-architecture.png` · `deploy-security.png`는 11-04 그림. Redis, 비서 실선, 8414/8413 포트가 없음 | 다음 그림 갱신 때 같이 | 재웅 |
-| 입실 방식 | core는 키패드(`POST /api/access/verify`)만 있음. 8차 회의로 1실에서 NFC · QR도 시도 | 같은 확인 API에 방식(`KEYPAD` · `NFC` · `QR`)만 다르게 받을지 정하기 | 지영 · 수연 |
+| 입실 방식 | Q-16 확정(요구사항 v0.4.21): 입실 API는 `POST /api/access/verify` 하나, 방식은 `deviceId`로 구분. 입실 QR 글자 `qrText`는 core #71 | — | — |
 | 카메라 인원 세기 | device `room_camera.py`는 이미 사람 수를 세어 재실(`occupied = 사람 > 0 또는 PIR`)에 쓰고 있음. 요구사항은 Q-17 결정 대기 | 11/9 점검 전 Q-17 결정 → 요구사항 FR-DEV-101·103에 반영 | 팀 |
 | 노쇼 · 자동 퇴실 | 요구사항은 v0.2인데 core에 이미 있고 켜져 있음 | 시연 전 동작 확인 | — |
 | agent `CORE_BASE_URL` | compose가 넘기지만 agent가 안 씀 | compose에서 빼기 | 재웅 |
 | 중계 `gateway.py` | 기본 주소 `http://localhost:8080` | 맥은 `http://localhost:8413`, 서버는 `https://dev-mspace.java21.net` | 디바이스 담당 |
-| 키패드 잠금 | 11-04에 "틀린 횟수가 잠금 뒤에도 쌓임"으로 적었던 것. 고쳐졌는지 확인 필요 | 시연 전 `keypad_lock` 초기화 | core 담당 |
+| 키패드 잠금 | 11-04에 "틀린 횟수가 잠금 뒤에도 쌓임"으로 적었던 것. 11-10 확인: core는 잠글 때와 문이 열릴 때 틀린 횟수를 0으로 되돌림 | 시연 전 `keypad_lock` 초기화만 | core 담당 |
 | 비서 채널 | **결정(11/5 재웅): v0.3은 앱 비서 탭(웹 채팅 + 확인 카드)만.** 텔레그램은 카드 방식을 정한 뒤 | — | 팀 |
 
 ## 고치는 규칙

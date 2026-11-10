@@ -268,7 +268,7 @@ kr.ac.chosun.mspace
 | `Clock` 빈 | `Clock.system(ZoneId.of("Asia/Seoul"))`. 테스트는 `Clock.fixed(…, Asia/Seoul)` |
 | 날짜 경계 | "오늘", "7일 안", 자정 넘김(23:00–01:00)은 **서울 날짜**로 계산한다. UTC로 계산하면 09시 전까지 날짜가 하루 밀린다 |
 | 응답으로 내보낼 때 | 항상 `+09:00`으로 바꿔서 내보낸다. `Z`(UTC)로 내보내지 않는다. Jackson은 읽을 때 UTC로 바꿔 두므로 DTO를 만들 때 `atZoneSameInstant(SEOUL).toOffsetDateTime()` (설정 한 줄로 바꾸는 방법은 Boot 4·Jackson 3 기준 확인 필요) |
-| 입력을 받을 때 (core API) | 오프셋이 붙은 ISO-8601을 기준으로 한다. 오프셋 없는 값을 거절할지 서울로 볼지는 core가 정한다 (지영 확인 필요) |
+| 입력을 받을 때 (core API) | 오프셋이 붙은 ISO-8601을 기준으로 한다. 오프셋 없는 값은 core가 `400 INVALID_REQUEST`로 거절한다. `Z`는 받는다 ([API 명세](api/README.md) 1장) |
 | 입력을 받을 때 (사람·AI가 만든 값) | 화면 입력과 MCP 도구는 오프셋이 없으면 **서울 시간으로 보고 `+09:00`을 붙여서** core에 보낸다. 오프셋이 있으면 그대로 쓴다 |
 | DB | 컬럼은 `timestamptz`. PostgreSQL은 UTC로 저장하고, 읽을 때 순간은 같다. 화면·API 표시는 위 "내보낼 때" 규칙으로 맞춘다 |
 | 서버 시간대 설정 | 코드가 시간대에 기대지 않는 것이 원칙이다. 로그 시각을 읽기 쉽게 하려면 컨테이너에 `TZ=Asia/Seoul`을 둬도 되지만, 이것으로 버그를 가리지 않는다 |
