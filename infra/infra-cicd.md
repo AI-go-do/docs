@@ -135,7 +135,7 @@ gitGraph
 
 - 비밀번호·키는 **저장소에 절대 올리지 않는다.** GitHub Actions Secrets에만 두고, 배포 때 서버의 `.env`로 전달.
 - `.env`는 `.gitignore`에 넣고, 저장소에는 `.env.example`(값 없이 항목만)만 둔다.
-- 서버 `.env`에 들어가는 값: `JWT_SECRET`(core·게이트웨이 같은 값), DB 비밀번호, `REDIS_PASSWORD`, `MSPACE_DEVICE_TOKEN`, `MAIL_*`, `GEMINI_API_KEY`. 환경(개발/시연)마다 다른 값을 쓴다.
+- 서버 `.env`에 들어가는 값: `JWT_SECRET`(core·게이트웨이 같은 값), DB 비밀번호, `REDIS_PASSWORD`, `MSPACE_DEVICES`(장치별 토큰 `deviceId:roomId:토큰`, core #91. 예전 공용 `MSPACE_DEVICE_TOKEN`은 옮기는 동안만), `MAIL_*`, `GEMINI_API_KEY`. 환경(개발/시연)마다 다른 값을 쓴다.
 - **사비 0원 원칙.** 유료 클라우드(AWS 등)는 쓰지 않는다. 학교 서버가 안 되는 부분은 무료 대안(Cloudflare Tunnel, Oracle Cloud 무료 등급)으로 메운다.
 
 ## 7. 운영 기본
