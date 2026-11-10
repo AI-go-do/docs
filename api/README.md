@@ -17,6 +17,7 @@
 | 화면 · 비서 | `GET /api/rooms/availability?date=` | 하루 30분 칸별 빈방 | FR-WEB-004 | ✅ develop |
 | 화면 · 비서 | `GET /api/rooms/status` | 방 현황 (지금 비었는지, 다음 예약, 센서 재실) | FR-DEV-102 | ✅ develop |
 | 화면 · 비서 | `GET /api/members?studentId=` | 학번 검색 (친구 요청 전에 이름 확인) | FR-RSV-004 | ✅ develop |
+| 화면 | `GET /api/members/me` | 내 정보 (학번·이름, 마이 화면) | 11/9 지영 | ✅ develop (core #102) |
 | 화면 | `GET /api/friends` | 친구 창: 친구·받은 요청·보낸 요청 | FR-RSV-004 | ✅ develop |
 | 화면 | `POST /api/friends/requests` | 학번으로 친구 요청 | FR-RSV-004 | ✅ develop |
 | 화면 | `POST /api/friends/requests/{id}/accept`·`decline`·`cancel` | 수락·거절(받은 사람), 취소(보낸 사람) | FR-RSV-004 | ✅ develop |
@@ -27,8 +28,8 @@
 | 화면 · 비서 | `POST /api/reservations/{id}/cancel` | 시작 전 취소 (즉시 시작은 누른 뒤 5분 안) | FR-RSV-007 | ✅ develop · 즉시 시작 예외 core #84 |
 | 화면 · 비서 | `POST /api/reservations/{id}/checkout` | 퇴실 | FR-RSV-008 | ✅ develop |
 | 화면 · 비서 | `POST /api/reservations/{id}/continue` | 연장하기 (사용 중 이어 쓰기, 1회) | FR-RSV-105 | ✅ develop |
-| 화면 | `GET /api/relay/waits/me`, `POST /api/relay/waits`, `POST /api/relay/waits/{id}/cancel` | 빈방 릴레이: 차 있는 칸 기다리기 (1인 3개) | Q-18 | core (PR 대기) |
-| 화면 | `GET /api/relay/offers/me`, `POST /api/relay/offers/{id}/decline` | 빈방 릴레이: 나에게 넘어온 자리, 넘길게요 | Q-18 | core (PR 대기) |
+| 화면 | `GET /api/relay/waits/me`, `POST /api/relay/waits`, `POST /api/relay/waits/{id}/cancel` | 빈방 릴레이: 차 있는 칸 기다리기 (1인 3개) | Q-18 | ✅ develop (core #101) |
+| 화면 | `GET /api/relay/offers/me`, `POST /api/relay/offers/{id}/decline` | 빈방 릴레이: 나에게 넘어온 자리, 넘길게요 | Q-18 | ✅ develop (core #101) |
 | 화면 | `POST /api/reservations/{id}/still-here` | 아직 있어요 (자리 비움 타이머 다시, 예약당 1번) | FR-DEV-103 | ✅ develop |
 | 관리자 | `GET /api/reservations/stats` | WEB/AGENT 예약 건수 | NFR-COM-008 | ✅ develop |
 | 화면 | `POST /api/reports` | 신고 (그 방·옆 방) | FR-RPT-101 | ✅ develop |
@@ -49,8 +50,8 @@
 | 화면 | `POST /api/room-watches`, `POST /api/room-watches/{roomId}/cancel` | 빈방 알림 켜기·끄기 (그 방이 비면 알림 한 번) | 11/9 지영 | ✅ develop (core #109) |
 | 키패드·QR | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 (문 앞 웹캠 QR도 같은 API) | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 (CO2에 온도·습도 선택) | FR-DEV-101~104 | ✅ develop · 온도·습도 core #97 |
-| 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·재실 + 지난 N분 1분 값 | Q-21 | core #97 |
-| 키패드·QR | `POST /api/device-faults` | 장치 오류 구간·그동안 눌린 번호 알리기 → 장치 탓 노쇼 자동 무르기 | Q-19 | ⏳ core #99 리뷰 중 |
+| 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·재실 + 지난 N분 1분 값 | Q-21 | ✅ develop (core #97, #106) |
+| 키패드·QR | `POST /api/device-faults` | 장치 오류 구간·그동안 눌린 번호 알리기 → 장치 탓 노쇼 자동 무르기 | Q-19 | ✅ develop (core #99) |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
 | 화면 | `GET /api/penalties/me` | 내 경고 횟수·정지 ("내 경고 0회") | FR-WEB-003 · FR-RPT-104 | ✅ develop (core #92) |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
@@ -166,8 +167,8 @@
 }
 ```
 
-- 관리자가 막은 칸(Q-23)은 `available: false`에 `block: { "reason": "INSPECTION", "memo": "에어컨 점검", "endAt": "…" }`이 붙어요. 지금 막혀 있는 방은 `blockedNow`에 같은 모양, `occupiedNow`도 `true` (⏳ core #98 다음 PR)
-- 방 현황 `GET /api/rooms/status`도 걸린 예약 없이 막혀 있으면 `status: "BLOCKED"`와 `block`이 오고, `availableCount`에서 빠져요 (⏳ 같은 PR)
+- 관리자가 막은 칸(Q-23)은 `available: false`에 `block: { "reason": "INSPECTION", "memo": "에어컨 점검", "endAt": "…" }`이 붙어요. 지금 막혀 있는 방은 `blockedNow`에 같은 모양, `occupiedNow`도 `true` (core #103)
+- 방 현황 `GET /api/rooms/status`도 걸린 예약 없이 막혀 있으면 `status: "BLOCKED"`와 `block`이 오고, `availableCount`에서 빠져요 (core #103)
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
@@ -186,6 +187,14 @@
 | 오류 | 상태 | 언제 |
 |---|---|---|
 | `MEMBER_NOT_FOUND` | 404 | 없는 학번 또는 학생 인증 전 (둘을 구별해 알려 주지 않아요) |
+
+### `GET /api/members/me` 내 정보 — 로그인 필요 (core #102)
+
+```json
+{ "studentId": "20230001", "name": "홍길동" }
+```
+
+마이 화면에 쓰는 내 학번·이름이에요. 이메일·회원 번호는 화면에 안 써서 내보내지 않아요. `Cache-Control: no-store`라 브라우저에 남지 않아요. 회원이 없으면 `404 MEMBER_NOT_FOUND`.
 
 ### 친구 — 모두 로그인 필요 (FR-RSV-004, 11/6)
 
@@ -881,7 +890,7 @@ CO2:
 - 신고 목록(`GET /api/reports`)에 자동 신고는 `source: "CAMERA"`, 사람 신고는 `source: "USER"`로 나와요(core #81). 카메라 신고는 신고자가 없어서 `reporterReservationId`가 `null`이에요.
 - 신고 증거(`GET /api/reports/{id}/evidence`)의 앞 예약 칸에도 같은 결과를 `tidyCheck`로 붙여요(없으면 `null`, core #110). 예: `"tidyCheck": {"result": "CLEAN", "items": ["chair"], "leftItems": ["BAG"], "observedAt": "2026-11-09T14:53:00+09:00"}`. 사람이 어질러짐을 신고하면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
 
-## 6-4. 장치 오류 · 방의 사과 (Q-19, ⏳ core #99)
+## 6-4. 장치 오류 · 방의 사과 (Q-19, core #99)
 
 문 장치(QR·키패드 게이트웨이)가 끊겨서 못 들어간 학생이 노쇼 벌칙을 받지 않게 해요. 장치는 끊긴 동안 오류 구간과 그동안 눌린 번호를 모아 뒀다가, 다시 연결되면 같은 `eventId`로 보내요(재실 이벤트처럼 1→2→4…30초 간격 재전송).
 
@@ -1021,7 +1030,7 @@ CO2:
 | 4 | 비서 | 모이면 빈방 찾기 → 예약 확인 카드 `needsParticipants: 3` | (같은 응답) |
 | 5 | 화면 | 카드가 친구 목록을 받아 버튼으로 보여 주고, "지영이랑 재웅이랑 수연이"처럼 말하면 가린 이름(김*영)과 맞춰 학번 칸을 채워요 | `GET /api/friends` (core 4장) |
 | 6 | 학생 | [확인] | `POST /api/agent/confirmations/{token}` |
-| 7 | core | 참여자에게 "OO님이 함께 예약했어요" 알림 | ⏳ **core 요청 중** (`RESERVATION_INVITED`, 아래) |
+| 7 | core | 참여자에게 "OO님이 함께 예약했어요" 알림 | ✅ develop (core #108, `RESERVATION_INVITED`, 아래) |
 
 - **친구 이름은 외부 AI로 가지 않아요.** 5번 이름 맞추기는 브라우저 안에서 해요. 비서 지시문도 "이름·학번을 묻지 않는다"를 그대로 둬요
 - 이름 맞추기 규칙: 가린 이름의 보이는 글자(성·끝 글자)만 비교해요. "김지영"(3글자)은 `김*영`과, "지영"(이름만)은 `?*영`과 맞아요. 끝의 "이·아·야"("지영이")는 떼고 한 번 더 봐요. 후보가 둘 이상이면 채우지 않고 후보 버튼을 보여 줘요
@@ -1041,7 +1050,7 @@ CO2:
 - 저장은 비서 Redis `agent:teams:<학생 키>`(TTL 없음). 모델 지시문에는 **팀 이름과 인원만** 들어가요. 팀원은 화면이 확인 카드에 채워요
 - 친구인지는 비서가 보지 않아요. 예약할 때 core가 `403 PARTICIPANT_NOT_FRIEND`로 막아요
 
-**core에 요청할 알림 (지영 확인 전 초안):** 예약이 만들어지면(웹·비서·즉시 시작 모두) 대표자를 뺀 참여자마다 알림함에 한 줄.
+**참여자 알림 (core #108 머지, 11/9 지영 확인):** 예약이 만들어지면(웹·비서·즉시 시작 모두) 대표자를 뺀 참여자마다 알림함에 한 줄.
 
 ```json
 { "kind": "RESERVATION_INVITED", "reservationId": 31, "title": "함께 쓰는 예약이 생겼어요",
@@ -1122,11 +1131,10 @@ PUT  { "style": "NAGGING" } → 같은 모양
 
 ## 8. 코드와 문서가 아직 다른 곳 (11/6 점검)
 
-11/3~6에 적었던 줄(알림 읽음 #69, 판정 벌칙 #70, 강제 퇴실 #73, 연장 #51, 신고 #52, 노쇼 벌칙 #58, `created_via` #45 + 비서 #54, 자리 비움 `AWAY_RELEASED`, 센서 #60·게이트웨이 공개 경로, 비서 API)은 모두 develop에 머지돼 지웠어요.
+11/3~6에 적었던 줄(알림 읽음 #69, 판정 벌칙 #70, 강제 퇴실 #73, 연장 #51, 신고 #52, 노쇼 벌칙 #58, `created_via` #45 + 비서 #54, 자리 비움 `AWAY_RELEASED`, 센서 #60·게이트웨이 공개 경로, 비서 API)과 11/10에 확인한 참여자 알림 `RESERVATION_INVITED`(#108)는 모두 develop에 머지돼 지웠어요.
 
 | 무엇 | 지금 | 할 일 |
 |---|---|---|
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
 | 입실 방식 NFC · QR | 8차 회의(11/6): 시험용 방 1실에서 키패드 → NFC → QR. 지금 API는 키패드(6장)만 | 요구사항 Q-16이 정해지면 6장에 방식별 모양 추가(지영·수연) |
-| 참여자 알림 `RESERVATION_INVITED` | 없음. 참여자는 내 예약을 열어 봐야 들어간 걸 알아요 (FR-AGT-105) | core 요청 초안(7장 "AI로 간단히 예약하기"), 지영 확인 |
 | 증거 사진 | core #76 머지됨, 응답 예시는 아직 없음 (5장 "관리자 화면용 API") | 응답 예시 추가 |
