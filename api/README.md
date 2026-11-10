@@ -38,6 +38,8 @@
 | 관리자 | `POST /api/reservations/{id}/force-checkout` | 강제 퇴실 (퇴출) | FR-RPT-104 | ✅ develop |
 | 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 + 앞 예약 방 카메라 결과(`previous.tidyCheck`) | FR-WEB-101 | ✅ develop (core #76, #110) |
 | 관리자 | `GET /api/tidy-checks?days=7` | 방 카메라 정리 확인 목록 (`phase`, 물건별 확신도) | FR-DEV-105 | ✅ develop (core #110, #112) |
+| 방 카메라 | `POST /api/rooms/{roomId}/tidy-photos` | 정리 확인 사진 올리기 (`FIRST`·`RECHECK` 1장씩, 30일 보관) | FR-DEV-105 · Q-27 | ✅ develop (core #115) |
+| 화면 · 관리자 | `GET /api/reservations/{id}/tidy-photos/{phase}` | 정리 확인 사진 보기 (그 예약 사람들·관리자) | FR-DEV-105 · Q-27 | ✅ develop (core #115) |
 | 관리자 | `GET /api/penalties?days=30` | 경고·정지 목록 | FR-WEB-101 | ✅ develop |
 | 관리자 | `GET`·`POST /api/admin/room-blocks` | 기간 막기 목록·만들기 (공사·점검·대관) | Q-23 | ✅ develop (core #98) |
 | 관리자 | `POST /api/admin/room-blocks/{id}/release`, `GET …/conflicts`, `POST …/cancel-conflicts` | 풀기, 겹친 예약 보기, 겹친 예약 취소 + 알림 | Q-23 | ✅ develop (core #98) |
@@ -48,14 +50,15 @@
 | 화면 | `POST /api/notifications/read-all` | 내 알림 모두 읽음 | FR-NTF-103 | ✅ develop |
 | 화면 | `GET /api/room-watches/me` | 오늘 켜 둔 빈방 알림 | 11/9 지영 | ✅ develop (core #109) |
 | 화면 | `POST /api/room-watches`, `POST /api/room-watches/{roomId}/cancel` | 빈방 알림 켜기·끄기 (그 방이 비면 알림 한 번) | 11/9 지영 | ✅ develop (core #109) |
-| QR | `POST /api/access/verify` | 입실 QR 안 번호 확인 → 문 열기 (11/10부터 QR만, 키패드·NFC 뺌) | FR-ACC-001 | ✅ develop |
+| QR | `POST /api/access/verify` | 입실 QR 안 번호 확인 → 문 열기 (11/10부터 QR만, 키패드·NFC 뺌). 찾으러 온 QR이면 `purpose: "RETRIEVE"` | FR-ACC-001 | ✅ develop · `purpose` core #114 |
+| 화면 | `POST /api/reservations/{id}/retrieve-pass` | "찾으러 갈게요": 두고 간 물건 가지러 들어가는 10분짜리 QR | FR-DEV-105 | ✅ develop (core #114) |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 (CO2에 온도·습도 선택) | FR-DEV-101~104 | ✅ develop · 온도·습도 core #97 |
 | 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·재실 + 지난 N분 1분 값 | Q-21 | ✅ develop (core #97, #106) |
 | QR | `POST /api/device-faults` | 장치 오류 구간·그동안 읽힌 번호 알리기 → 장치 탓 노쇼 자동 무르기 | Q-19 | ✅ develop (core #99) |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
 | 화면 | `GET /api/penalties/me` | 내 경고 횟수·정지 ("내 경고 0회") | FR-WEB-003 · FR-RPT-104 | ✅ develop (core #92) |
-| 화면 | `GET /api/penalties/me/warnings` | 내 경고 목록 + 철회 요청 상태 (내 예약 "경고 철회 요청 (N일 남음)") | FR-RPT-105 | ⏳ core #111 요청 |
-| 화면 | `POST /api/warnings/{id}/appeal` | 경고 철회 요청 (받은 뒤 7일 안, 1번) → AI가 다시 비교 | FR-RPT-105 | ⏳ core #111 요청 |
+| 화면 | `GET /api/penalties/me/warnings` | 내 경고 목록 + 철회 요청 상태 (내 예약 "경고 철회 요청 (N일 남음)") | FR-RPT-105 | ✅ develop (core #116) |
+| 화면 | `POST /api/warnings/{id}/appeal` | 경고 철회 요청 (받은 뒤 7일 안, 1번) → 판단기가 다시 비교 | FR-RPT-105 | ✅ develop (core #116) |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
 | 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT-101 | ✅ develop (assistant) |
 | 화면 | `DELETE /api/agent/chat/history` | 새 대화 (서버가 기억한 대화 지우기) | FR-AGT-101 | ✅ develop (assistant) |
@@ -656,8 +659,10 @@
 
 ```json
 { "result": "OPENED" }
+{ "result": "OPENED", "purpose": "RETRIEVE" }
 { "result": "DENIED", "reason": "WRONG_CODE" }
 ```
+`purpose`(core #114): "찾으러 갈게요" QR(`POST /api/reservations/{id}/retrieve-pass`)로 열렸을 때만 `"RETRIEVE"`, 보통 입실은 빠져요. 이때는 **체크인하지 않고**(예약 상태·노쇼 그대로), 틀린 횟수도 되돌리지 않아요(찾으러 온 QR로 잠금을 풀 수 없게).
 `reason`: `WRONG_CODE` 틀림, `NOT_YET` 아직 이름(시작 10분 전부터 열림), `LOCKED` 5번 연속 틀려 1분 잠김.
 
 `WRONG_CODE`가 나가는 경우는 이것도 포함해요.
@@ -729,21 +734,25 @@
 | `suspendedUntil` | 이용 정지(예약·참여, 노쇼 누적 포함) 중이면 끝나는 시각(`+09:00`), 아니면 `null` |
 | `reportSuspendedUntil` | 신고 정지 중이면 끝나는 시각, 아니면 `null` |
 
-### 경고 철회 요청 — 로그인 필요 (FR-RPT-105, ⏳ core #111 요청 · 모양 제안)
+### 경고 철회 요청 — 로그인 필요 (FR-RPT-105, ✅ develop core #116)
 
-억울한 경고를 받은 학생이 7일 안에 철회를 요청하고, **AI가 근거를 다시 비교**해 철회·유지를 정해요(11/10 재웅: 관리자는 정하지 않음). 아래는 web이 쓰려는 모양 제안이고, 실제 모양은 core(지영)가 정해요. 세부 규칙은 요구사항 Q-24.
+억울한 경고를 받은 학생이 7일 안에 철회를 요청하면 **판단기가 근거를 다시 비교**해 철회·유지를 정해요(11/10 재웅: 관리자는 정하지 않음). 세부 규칙은 요구사항 Q-24.
+
+- 판단은 core의 `WarningReviewer` 포트 뒤에서 해요(A-6). 지금은 **규칙 판단기**(`rules`, 지시문 버전 `rules-v1`)가 1분마다 대기 중인 요청을 최대 10개씩 봐요(11/10 지영 "규칙 판단기 먼저"). Gemini 판단기는 다음 PR이고, 키가 없으면 규칙 판단기로 돌아요.
+- 규칙 판단기 기준: 방 카메라 경고는 다시 확인(`RECHECK`) 때 가장 높은 확신도가 경고 기준(0.8, `mspace.tidy.warn-min-confidence`) 이상이면 유지, 아니면 철회. 사람 신고로 받은 경고는 지금 자동으로 다시 볼 수 없어서 철회해요(확인할 수 없으면 벌칙 없음).
+- Q-24 ①–③(11/10 지영): ① 요청 중에도 경고 횟수에 세요. ② 철회되면 그 경고는 횟수에서 빠지고, 그 경고로 걸린 정지도 바로 풀려요. ③ 판단기가 유지라 해도 확신도가 0.8(`mspace.appeal.min-confidence`) 아래면 철회해요.
 
 #### `GET /api/penalties/me/warnings?days=30` 내 경고 목록
 
-본인 것만, 최근 것부터. 내 예약 화면은 `reservationId`로 지난 예약 카드에 버튼을 붙여요.
+본인 것만, 최근 것부터. `days`는 1–90(기본 30), 벗어나면 `400 INVALID_REQUEST`. 내 예약 화면은 `reservationId`로 지난 예약 카드에 버튼을 붙여요.
 
 ```json
 200
 [
   { "id": 41, "reason": "VIOLATION", "reportType": "MESSY", "roomId": 3,
     "reservationId": 812, "startAt": "2026-11-08T14:00:00+09:00", "endAt": "2026-11-08T16:00:00+09:00",
-    "createdAt": "2026-11-08T16:12:00+09:00", "why": "퇴실 뒤 방 카메라가 정리 필요로 봤어요",
-    "appealableUntil": "2026-11-15T16:12:00+09:00",
+    "createdAt": "2026-11-08T19:12:00+09:00", "why": "퇴실 뒤 방 카메라가 다시 봤을 때도 두고 간 물건이 남아 있었어요",
+    "appealableUntil": "2026-11-15T19:12:00+09:00",
     "appeal": null }
 ]
 ```
@@ -753,8 +762,10 @@
 | `reason` | `VIOLATION`(수칙 위반) · `FALSE_REPORT`(허위 신고) |
 | `reportType` | 걸린 신고 종류 `MESSY`·`WINDOW_OPEN`·`BROKEN`·`NOISE` |
 | `reservationId` | 경고가 걸린 예약. 허위 신고 경고는 신고할 때 쓰던 예약(없으면 `null`) |
-| `appealableUntil` | 요청 마감 = `createdAt` + 7일(설정값) |
-| `appeal` | 아직 안 보냈으면 `null`. 보냈으면 `{ "status": "PENDING" \| "WITHDRAWN" \| "KEPT", "text", "createdAt", "decidedAt", "answer" }` (`answer` = AI 이유 3줄을 학생용 한 문단으로) |
+| `startAt` · `endAt` | 그 예약 시간(예약이 없으면 `null`) |
+| `why` | 경고 이유 한 줄. 방 카메라 "퇴실 뒤 방 카메라가 다시 봤을 때도 두고 간 물건이 남아 있었어요", 사람 신고 "이용하신 방의 ○○ 신고가 사실로 판정됐어요", 허위 신고 "○○ 신고가 허위로 판정됐어요" |
+| `appealableUntil` | 요청 마감 = `createdAt` + 7일(`mspace.appeal.days`) |
+| `appeal` | 아직 안 보냈으면 `null`. 보냈으면 `{ "status": "PENDING" \| "WITHDRAWN" \| "KEPT", "text", "createdAt", "decidedAt", "answer" }` (`answer` = 판단기 이유를 학생용 한 문단으로, 판단 전엔 `decidedAt`·`answer`가 `null`) |
 
 #### `POST /api/warnings/{id}/appeal` 철회 요청 보내기
 
@@ -762,10 +773,11 @@
 { "text": "퇴실할 때 컵은 다 버렸어요. 다시 봐 주세요.", "evidence": ["CHECKOUT_PHOTO"] }
 ```
 
-- `201` → 위 목록의 한 줄(`appeal.status = PENDING`). AI 판단이 끝나면 `WITHDRAWN`·`KEPT`로 바뀌고 알림 `WARNING_APPEAL_RESULT`
-- `text` 10–500자. 전화번호·학번 같은 긴 숫자는 `400 VALIDATION_FAILED` (AI에게 넘어가므로)
-- 남의 경고 `404`, 7일 지남 `409 WARNING_APPEAL_EXPIRED`, 이미 보냄 `409 WARNING_APPEAL_DUPLICATE`
-- core는 판단마다 모델·지시문 버전·결정·확신도·쓴 근거를 남겨요. 정답 세트로 정확도를 재서 표로 내려고요(요구사항 FR-RPT-105 "신뢰도 기록")
+- `201` → 위 목록의 한 줄(`appeal.status = PENDING`). 판단이 끝나면 `WITHDRAWN`·`KEPT`로 바뀌고 알림 `WARNING_APPEAL_RESULT`("경고가 철회됐어요" / "경고가 유지됐어요", 정지가 풀리면 본문에 함께 적어요)
+- `text` 10–500자(이모지도 1자). 7자리 넘는 숫자(사이 공백·`-` 포함, 전화번호·학번)는 `400 INVALID_REQUEST` (나중에 외부 AI로 넘어갈 수 있어서)
+- `evidence`(선택): 다시 봐 달라는 근거 `CHECKIN_PHOTO`·`CHECKOUT_PHOTO`·`TIDY_CHECK` 중에서. 다른 값이나 `null`이 섞이면 `400 INVALID_REQUEST`
+- 없는 경고·남의 경고 `404 WARNING_NOT_FOUND`, 7일 지남 `409 WARNING_APPEAL_EXPIRED`, 이미 보냄 `409 WARNING_APPEAL_DUPLICATE`
+- core는 판단마다 판단기 이름·지시문 버전·결정·확신도·쓴 근거를 남겨요(`warning_appeal` 표). 정답 세트로 정확도를 재서 표로 내려고요(요구사항 FR-RPT-105 "신뢰도 기록")
 
 ## 6-2. 재실 · CO2 센서
 
@@ -859,12 +871,13 @@ CO2:
 방 안 카메라(젯슨)가 **예약이 실제로 끝났을 때만** 남은 물건을 봐요. "방이 30초 비면" 기준은 다 같이 화장실만 가도 걸려서 쓰지 않아요(11/6 지영·수연).
 **사진은 저장하지 않아요.** 젯슨은 1초에 한 번 화면에서 사람 수와 물건 이름만 뽑고 화면을 바로 버려요. core로는 글자만 가요. 개발용 미리보기는 기본 꺼짐, 켜도 팀 Tailscale 안에서만 열리고 저장하지 않아요.
 예외는 비교 기준 1장이에요(11/9, Q-22). 사람이 처음 보이기 직전 3초 동안 0명인 빈 방 화면 1장을 그 예약 기준으로 젯슨 안에만 두고, 정리 확인 결과를 보내면 지워요. 서버로는 안 가요. 방이 한 번도 안 비어 기준이 없으면 그 예약은 결과를 보내지 않아요(어질러짐 신고가 받음).
-10차 회의(11/10)로 사람이 0명인 빈 방·물건 사진은 저장할 수 있게 됐지만, 사진을 올리는 API와 보관 위치·기간, 물건을 가져가러 들어가는 방법은 아직 **결정 대기**(Q-27)예요. 지금 API는 글자만 받아요.
+10차 회의(11/10)로 사람이 0명인 빈 방·물건 사진은 저장할 수 있게 됐어요(Q-27, 지영 "core에 30일"). 젯슨이 확인 결과와 별도로 `FIRST`·`RECHECK` 사진을 1장씩 core에 올리고, core가 30일 뒤 지워요(아래 `tidy-photos`, core #115). 물건을 가져가러 들어가는 방법은 "찾으러 갈게요" 10분 QR이에요(`POST /api/reservations/{id}/retrieve-pass`, core #114).
 
 **두고 간 물건 흐름 (11/10 지영·수연, core #112).** 예약 하나에 확인이 **두 번**까지 있어요.
 1. 첫 확인(`FIRST`): 예약이 끝나면 바로 봐요. 남은 물건이 있으면(`LEFT_ITEMS`, 쓰레기 포함, 종류 구분 없음) 대표자·참여자에게 **알림만** 가요. 신고·경고는 없어요.
 2. 다시 확인(`RECHECK`): 첫 확인이 `LEFT_ITEMS`였으면 **퇴실 3시간 뒤**에 다시 봐요(`current.recheck`가 알려 줘요). 그때도 확신도 0.8 이상 물건이 남아 있으면 core가 바로 어질러짐 신고를 사실로 정하고 **대표자에게 경고**를 줘요.
-3. 퇴실 뒤 3시간 안에 **다음 팀이 입실하면 다시 보지 않고 경고도 없어요**(누구 물건인지 갈리지 않음).
+3. 퇴실 뒤 3시간 안에 **다음 팀이 입실하면 다시 보지 않고 경고도 없어요**(누구 물건인지 갈리지 않음). 지금 core 코드 기준이에요. 11/10 지영이 "다음 팀이 써도 3시간 안에 안 찾아가면 경고"를 원해서, 수연과 방법(다음 팀 입실 때 다시 확인 등)을 정한 뒤 바꿀 예정이에요.
+4. 찾으러 갈게요: 첫 확인이 `LEFT_ITEMS`면 대표자·참여자가 퇴실 뒤 3시간 안에 10분짜리 QR을 받아 들어갈 수 있어요(다음 팀이 쓰는 중이어도). 아래 `retrieve-pass`.
 
 ### `GET /api/rooms/{roomId}/current` 지금 예약·방금 끝난 예약 — 장치 토큰 필요
 
@@ -929,6 +942,58 @@ CO2:
 | `TIDY_RECHECK_TOO_EARLY` | 409 | `RECHECK`인데 지금 시각이나 `observedAt`이 `recheck.at`(퇴실 + 3시간)보다 이름 |
 
 - API 게이트웨이: 장치 토큰은 JWT가 아니라서 `/api/rooms/{roomId}/current`, `/api/rooms/{roomId}/tidy-checks`도 `/api/sensor-events`처럼 공개 경로로 넣어야 해요. 장치 토큰은 core가 확인해요 (재웅)
+
+### `POST /api/reservations/{id}/retrieve-pass` 찾으러 갈게요 QR — 로그인 필요 (✅ develop, core #114)
+
+두고 간 물건 알림(`LEFT_ITEM`)을 받은 **대표자·참여자**가 누르면 문 앞에서 쓸 10분짜리 QR을 줘요. 본문 없음.
+
+```json
+200
+{ "reservationId": 40, "roomId": 2, "code": "482913", "qrText": "MSPACE:2:482913",
+  "expiresAt": "2026-11-09T15:12:10+09:00" }
+```
+
+- 조건: 그 예약의 첫 확인(`FIRST`)이 `LEFT_ITEMS`이고, 퇴실 뒤 3시간(`recheck-after-minutes`) 안. 다음 팀이 방을 쓰는 중이어도 받아요.
+- 10분 안에 다시 누르면 **같은 QR**을 줘요. 10분 안에는 여러 번 열 수 있어요.
+- 문 앞 장치는 보통 입실 QR처럼 `POST /api/access/verify`로 보내고, 답이 `{"result":"OPENED","purpose":"RETRIEVE"}`예요. 체크인은 하지 않아요.
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `RESERVATION_NOT_FOUND` | 404 | 없는 예약이거나 내가 대표자·참여자가 아님 |
+| `RESERVATION_NOT_ENDED` | 409 | 아직 안 끝났거나 입실 안 한 예약 |
+| `RETRIEVE_NOT_NEEDED` | 409 | 방 카메라가 두고 간 물건을 찾지 않음(첫 확인이 없거나 `CLEAN`) |
+| `RETRIEVE_TOO_LATE` | 409 | 퇴실 뒤 3시간 지남 |
+
+### `POST /api/rooms/{roomId}/tidy-photos` 정리 확인 사진 올리기 — 장치 토큰 필요 (✅ develop, core #115)
+
+`multipart/form-data`로 보내요. 정리 확인 결과(`tidy-checks`)와 따로 올려요.
+
+| 칸 | 뜻 |
+|---|---|
+| `reservationId` | `current`의 `lastEnded.reservationId` |
+| `phase` | `FIRST` · `RECHECK` |
+| `deviceId` | 보낸 장치(`camera-방번호`), 장치 토큰과 맞아야 해요 |
+| `file` | JPEG·PNG 1장, 최대 2MB. 확장자가 아니라 파일 앞부분으로 확인해요 |
+
+→ `201 { "reservationId": 40, "phase": "FIRST", "uploadedAt": "2026-11-09T14:53:05+09:00", "sizeBytes": 412345 }`
+
+- 예약 하나에 `FIRST`·`RECHECK` 1장씩. 이 방에서 가장 최근에 끝난 예약에만 올릴 수 있어요. 30일 뒤 자동으로 지워요(퇴실 사진과 같은 규칙, FR-RPT-102).
+- 사람이 0명일 때 찍은 사진만 올려요(10차 회의).
+- nginx가 요청을 1MB쯤에서 막을 수 있어요. 젯슨이 1MB 아래로 줄여 보내고, 서버 한도는 재웅 확인 필요.
+- API 게이트웨이: `current`·`tidy-checks`처럼 공개 경로로 넣어야 해요(장치 토큰은 core가 확인, 재웅).
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `PHOTO_INVALID` | 400 | `reservationId`·`phase`·`file` 빠짐, JPEG·PNG가 아님 |
+| `PHOTO_TOO_LARGE` | 400 | 2MB 넘음 |
+| `DEVICE_UNAUTHORIZED` · `DEVICE_ROOM_MISMATCH` · `DEVICE_ID_MISMATCH` | 401 · 403 · 403 | 장치 토큰 문제(6장과 같음) |
+| `RESERVATION_NOT_FOUND` | 404 | 이 방의 예약이 아님 |
+| `TIDY_CHECK_NOT_LATEST` | 409 | 이 방의 마지막 퇴실 예약이 아님 |
+| `PHOTO_ALREADY_UPLOADED` | 409 | 같은 `phase` 사진이 이미 있음 |
+
+### `GET /api/reservations/{id}/tidy-photos/{phase}` 정리 확인 사진 보기 — 로그인 필요 (✅ develop, core #115)
+
+`phase`는 `FIRST` · `RECHECK`. 그 예약의 대표자·참여자와 관리자만 볼 수 있어요. 사진 바이트를 그대로(`image/jpeg`·`image/png`) 주고, 저장하지 않게 `Cache-Control: no-store`예요. 사진이 없거나 볼 수 없는 사람이면 모두 `404 PHOTO_NOT_FOUND`(있는지도 알리지 않아요).
 
 ### `GET /api/tidy-checks?days=7` 정리 확인 목록 — 관리자만 (✅ develop, core #110)
 
