@@ -37,7 +37,7 @@
 | 관리자 | `POST /api/reports/{id}/judge` | 신고 판정 + 경고·정지·알림 | FR-RPT-103·104 | ✅ develop |
 | 관리자 | `POST /api/reservations/{id}/force-checkout` | 강제 퇴실 (퇴출) | FR-RPT-104 | ✅ develop |
 | 관리자 | `GET /api/reports/{id}/evidence` | 판정용 증거 사진 두 장 + 앞 예약 방 카메라 결과(`previous.tidyCheck`) | FR-WEB-101 | ✅ develop (core #76, #110) |
-| 관리자 | `GET /api/tidy-checks?days=7` | 방 카메라 정리 확인 목록 | FR-DEV-105 | ✅ develop (core #110) |
+| 관리자 | `GET /api/tidy-checks?days=7` | 방 카메라 정리 확인 목록 (`phase`, 물건별 확신도) | FR-DEV-105 | ✅ develop (core #110, #112) |
 | 관리자 | `GET /api/penalties?days=30` | 경고·정지 목록 | FR-WEB-101 | ✅ develop |
 | 관리자 | `GET`·`POST /api/admin/room-blocks` | 기간 막기 목록·만들기 (공사·점검·대관) | Q-23 | ✅ develop (core #98) |
 | 관리자 | `POST /api/admin/room-blocks/{id}/release`, `GET …/conflicts`, `POST …/cancel-conflicts` | 풀기, 겹친 예약 보기, 겹친 예약 취소 + 알림 | Q-23 | ✅ develop (core #98) |
@@ -480,7 +480,7 @@
 |---|---|---|
 | `GET /api/penalties?days=30` | ✅ develop (core #75) | 경고·정지 목록 |
 | `GET /api/stats/usage?from=&to=` | ✅ develop (core #74, 알림 효과 #93) | 이용 통계 + 센서 값 + 알림 효과 |
-| `GET /api/reports/{id}/evidence` | ✅ develop (core #76) | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음). 방 카메라 자동 신고는 `reporter: null`. `previous.tidyCheck`는 그 예약이 끝난 뒤 방 카메라 결과 `{result, items, leftItems, observedAt}`, 없으면 `null` (core #110) |
+| `GET /api/reports/{id}/evidence` | ✅ develop (core #76) | 직전 이용 예약의 퇴실(`CHECK_OUT`) 사진, 신고자 예약의 입실(`CHECK_IN`) 사진. 사진마다 `exists`, 있으면 `url`(사진 보기 주소), 없으면 `note`(안 올림·30일 지나 지움·직전 예약 없음). 방 카메라 자동 신고는 `reporter: null`. `previous.tidyCheck`는 그 예약이 끝난 뒤 방 카메라 첫 확인(`FIRST`) 결과 `{result, items, leftItems, observedAt}`, 없으면 `null` (core #110, #112) |
 
 #### 기간 막기 `/api/admin/room-blocks` (Q-23, core #98)
 
@@ -858,18 +858,25 @@ CO2:
 
 방 안 카메라(젯슨)가 **예약이 실제로 끝났을 때만** 남은 물건을 봐요. "방이 30초 비면" 기준은 다 같이 화장실만 가도 걸려서 쓰지 않아요(11/6 지영·수연).
 **사진은 저장하지 않아요.** 젯슨은 1초에 한 번 화면에서 사람 수와 물건 이름만 뽑고 화면을 바로 버려요. core로는 글자만 가요. 개발용 미리보기는 기본 꺼짐, 켜도 팀 Tailscale 안에서만 열리고 저장하지 않아요.
-예외는 비교 기준 1장이에요(11/9, Q-22). 사람이 처음 보이기 직전 3초 동안 0명인 빈 방 화면 1장을 그 예약 기준으로 젯슨 안에만 두고, 정리 확인 결과를 보내면 지워요. 서버로는 안 가요. 방이 한 번도 안 비어 기준이 없으면 그 예약은 결과를 보내지 않아요(어질러짐 신고가 받음). API·요청 모양은 그대로예요.
+예외는 비교 기준 1장이에요(11/9, Q-22). 사람이 처음 보이기 직전 3초 동안 0명인 빈 방 화면 1장을 그 예약 기준으로 젯슨 안에만 두고, 정리 확인 결과를 보내면 지워요. 서버로는 안 가요. 방이 한 번도 안 비어 기준이 없으면 그 예약은 결과를 보내지 않아요(어질러짐 신고가 받음).
+10차 회의(11/10)로 사람이 0명인 빈 방·물건 사진은 저장할 수 있게 됐지만, 사진을 올리는 API와 보관 위치·기간, 물건을 가져가러 들어가는 방법은 아직 **결정 대기**(Q-27)예요. 지금 API는 글자만 받아요.
+
+**두고 간 물건 흐름 (11/10 지영·수연, core #112).** 예약 하나에 확인이 **두 번**까지 있어요.
+1. 첫 확인(`FIRST`): 예약이 끝나면 바로 봐요. 남은 물건이 있으면(`LEFT_ITEMS`, 쓰레기 포함, 종류 구분 없음) 대표자·참여자에게 **알림만** 가요. 신고·경고는 없어요.
+2. 다시 확인(`RECHECK`): 첫 확인이 `LEFT_ITEMS`였으면 **퇴실 2시간 뒤**에 다시 봐요(`current.recheck`가 알려 줘요). 그때도 확신도 0.8 이상 물건이 남아 있으면 core가 바로 어질러짐 신고를 사실로 정하고 **대표자에게 경고**를 줘요.
+3. 퇴실 뒤 2시간 안에 **다음 팀이 입실하면 다시 보지 않고 경고도 없어요**(누구 물건인지 갈리지 않음).
 
 ### `GET /api/rooms/{roomId}/current` 지금 예약·방금 끝난 예약 — 장치 토큰 필요
 
-젯슨이 **10초마다** 불러요. `lastEnded.reservationId`가 바뀌면 그 예약이 방금 끝난 것이라 정리 확인을 시작해요. 시간 종료·직접 퇴실·자리 비움 퇴실이 모두 잡히고, 다음 예약이 바로 입실해도 놓치지 않아요.
+젯슨이 **10초마다** 불러요. `lastEnded.reservationId`가 바뀌면 그 예약이 방금 끝난 것이라 첫 확인을 시작해요. 시간 종료·직접 퇴실·자리 비움 퇴실이 모두 잡히고, 다음 예약이 바로 입실해도 놓치지 않아요. `recheck`가 있으면 `at` 시각이 지난 뒤 다시 확인을 보내요.
 
 ```json
 200
 { "roomId": 2,
   "current": { "reservationId": 41, "status": "IN_USE",
                "startAt": "2026-11-09T15:00:00+09:00", "endAt": "2026-11-09T17:00:00+09:00" },
-  "lastEnded": { "reservationId": 40, "status": "CHECKED_OUT", "endedAt": "2026-11-09T14:52:10+09:00" } }
+  "lastEnded": { "reservationId": 40, "status": "CHECKED_OUT", "endedAt": "2026-11-09T14:52:10+09:00" },
+  "recheck": { "reservationId": 40, "at": "2026-11-09T16:52:10+09:00" } }
 ```
 
 | 필드 | 뜻 |
@@ -877,35 +884,38 @@ CO2:
 | `current` | 지금 시간에 걸린 예약(`BOOKED` 입실 전 또는 `IN_USE`). 없으면 `null` |
 | `lastEnded` | 이 방에서 가장 최근에 끝난 예약. `status`는 `CHECKED_OUT`(직접 퇴실·강제 퇴실) `AUTO_CHECKED_OUT`(시간 종료) `AWAY_RELEASED`(자리 비움). 입실 안 한 예약(`NO_SHOW`·`CANCELED`)은 방에 아무도 없었으니 넣지 않아요. 없으면 `null` |
 | `endedAt` | 실제로 나간 시각(`checked_out_at`) |
+| `recheck` | 다시 확인할 예약. `lastEnded` 예약의 첫 확인이 `LEFT_ITEMS`이고, 아직 다시 확인이 없고, 그 뒤 이 방에 아무도 입실하지 않았을 때만 줘요. 아니면 `null`. `at` = 퇴실 시각 + 2시간(`mspace.tidy.recheck-after-minutes`, 기본 120) |
 
 - 예약자 이름·학번은 주지 않아요(장치에 필요 없음).
 - 오류: `401` 토큰 문제, `404 ROOM_NOT_FOUND`.
 
 ### `POST /api/rooms/{roomId}/tidy-checks` 정리 확인 결과 — 장치 토큰 필요
 
-방에 **사람이 0명일 때 보인 물건 목록**으로 판단한 결과를 보내요. 예약 하나에 결과 하나예요.
+방에 **사람이 0명일 때 보인 물건 목록**으로 판단한 결과를 보내요. 예약 하나에 `FIRST` 1개, `RECHECK` 1개까지예요.
 
 ```json
-{ "eventId": "5b0e1c2a-…", "reservationId": 40, "deviceId": "camera-2",
-  "result": "NEEDS_CLEANING", "items": ["cup", "bottle", "backpack"], "leftItems": ["BAG"],
+{ "eventId": "5b0e1c2a-…", "reservationId": 40, "deviceId": "camera-2", "phase": "FIRST",
+  "result": "LEFT_ITEMS", "items": [ { "name": "umbrella", "confidence": 0.93 }, { "name": "bottle", "confidence": 0.71 } ],
   "observedAt": "2026-11-09T14:53:00+09:00" }
-→ 200 { "result": "STORED", "reportId": 12 } 또는 { "result": "DUPLICATE", "reportId": 12 }
+→ 200 { "result": "STORED", "reportId": null } 또는 { "result": "DUPLICATE", "reportId": null }
 ```
+
+`RECHECK`에서 경고를 줬으면 `reportId`에 그 신고 번호가 와요(아니면 `null`).
 
 | 필드 | 형식 | 뜻 |
 |---|---|---|
 | `eventId` | 글자 1~64자 | 센서와 같아요. 같은 값을 다시 보내면 `DUPLICATE`로 한 번만 처리 |
 | `reservationId` | 정수 | `current`의 `lastEnded.reservationId` |
 | `deviceId` | 글자 50자 이하 | 보낸 장치(`camera-방번호`) |
-| `result` | `CLEAN` · `NEEDS_CLEANING` | 깨끗함 / 치울 것이 있음(컵·쓰레기 등). 두고 간 물건만 있으면 `CLEAN` + `leftItems`로 보내요(결과 값을 따로 두지 않아요) |
-| `items` | **필수**, 글자 배열 0~20개(빈 배열 가능), 각 1~50자 | 깨끗한 빈 방보다 늘어난 물건 이름(모델이 내는 이름 그대로). 방에 원래 있는 물건(리모컨 등)은 빠져요. 관리자 판정 때 근거로 보여 줘요 |
-| `leftItems` | `BAG` · `PHONE` · `EARBUDS` · `LAPTOP` 배열, 0~4개 | 두고 간 귀중품. 이 넷만 알림을 보내요(11/6 지영, 노트북은 수연 의견으로 추가) |
+| `phase` | `FIRST` · `RECHECK`, 없으면 `FIRST` | 퇴실 직후 첫 확인 / 2시간 뒤 다시 확인 |
+| `result` | `CLEAN` · `LEFT_ITEMS` | 남은 것 없음 / 남은 물건 있음(쓰레기 포함, 종류 구분 없음). 예전 값 `NEEDS_CLEANING`은 400 |
+| `items` | **필수**, 0~20개. `CLEAN`이면 빈 배열, `LEFT_ITEMS`면 1개 이상 | 깨끗한 빈 방보다 늘어난 물건. `name`은 모델이 내는 영어 이름 그대로(1~50자), `confidence`는 확신도 0~1(필수). 방에 원래 있는 물건(리모컨 등)은 빠져요 |
 | `observedAt` | 시각, 오프셋 필수(`+09:00` 권장, `Z`도 받음) | 확인한 시각. 오프셋이 없으면 400 |
 
 **core가 하는 일**
-- `NEEDS_CLEANING` → 그 방에 **어질러짐(`MESSY`) 신고를 자동으로 하나 만들어요**(신고자 없음, `source: CAMERA`, 내용에 `items`). 관리자가 판정하는 흐름은 사람 신고와 같고(`POST /api/reports/{id}/judge`), 사실(`CONFIRMED`)이면 **이 예약의 대표자**에게 경고가 가요(FR-RPT-104 규칙 그대로, 30일 3번 → 14일 정지). 허위(`FALSE`)여도 신고자가 없으니 경고는 없어요. 응답 `reportId`가 그 신고 번호(`CLEAN`이면 `null`).
-- `leftItems`가 있으면 → 그 예약의 대표자·참여자 모두에게 알림 `LEFT_ITEM`(제목 "두고 간 물건이 있어요", 내용 "2번 방에 가방을(를) 두고 가신 것 같아요. 다시 들러 확인해 주세요."). 벌칙 없음.
-- 카메라 결과만으로 바로 경고하지 않아요. 사진을 안 남겨서 잘못 봤을 때(방 원래 컵, 그림자) 학생이 반박할 증거가 없기 때문에 관리자가 한 번 걸러요(11/6 지영).
+- `FIRST` + `LEFT_ITEMS` → 그 예약의 대표자·참여자 모두에게 알림 `LEFT_ITEM`(제목 "두고 간 물건이 있어요", 내용 예 "2번 방에 umbrella·bottle을(를) 두고 가신 것 같아요. 2시간 안에 챙겨 가 주세요."). 물건이 많으면 "외 N개"로 줄여 300자 안에 맞춰요. 신고·경고는 없어요. 예전처럼 어질러짐 신고를 자동으로 만들지 않아요.
+- `RECHECK` + 확신도 0.8 이상(`mspace.tidy.warn-min-confidence`, 모델 비교 뒤 조정) 물건이 하나라도 있음 → 그 방에 어질러짐(`MESSY`) 신고를 만들고(신고자 없음, `source: CAMERA`, 내용 "방 카메라 자동 확인: 퇴실 뒤 다시 봐도 남은 물건 umbrella(0.93)") **같은 트랜잭션에서 사실(`CONFIRMED`)로 정해요**(판정한 관리자 없음). 이 예약의 **대표자에게 경고**가 가요(FR-RPT-104 규칙 그대로, 이유 "두고 간 물건을 2시간 안에 챙겨 가지 않았어요."). 0.8 아래 물건만 남았으면 기록만 해요.
+- 판정 위치(Q-28)의 AI 어댑터가 아직 없어서, 지금은 core가 위 기준으로 바로 정해요.
 
 | 오류 | 상태 | 언제 |
 |---|---|---|
@@ -914,7 +924,9 @@ CO2:
 | `RESERVATION_NOT_FOUND` | 404 | 이 방의 예약이 아님 |
 | `RESERVATION_NOT_ENDED` | 409 | 아직 안 끝난 예약이거나 입실 안 한 예약 |
 | `TIDY_CHECK_NOT_LATEST` | 409 | 이 방에서 **가장 최근에 끝난 예약**(`lastEnded`)이 아님. 장치 토큰이 공용이라 지난 예약에 신고를 만들지 못하게 막아요 |
-| `TIDY_CHECK_EXISTS` | 409 | 이 예약에 다른 `eventId`로 이미 결과가 있거나, 같은 `eventId`를 다른 예약에 씀 |
+| `TIDY_CHECK_EXISTS` | 409 | 이 예약에 같은 `phase` 결과가 다른 `eventId`로 이미 있거나, 같은 `eventId`를 다른 예약·`phase`에 씀 |
+| `TIDY_RECHECK_NOT_NEEDED` | 409 | `RECHECK`인데 다시 볼 것이 없음(첫 확인이 없거나 `CLEAN`), 또는 퇴실 뒤 이 방에 다음 팀이 입실함 |
+| `TIDY_RECHECK_TOO_EARLY` | 409 | `RECHECK`인데 지금 시각이나 `observedAt`이 `recheck.at`(퇴실 + 2시간)보다 이름 |
 
 - API 게이트웨이: 장치 토큰은 JWT가 아니라서 `/api/rooms/{roomId}/current`, `/api/rooms/{roomId}/tidy-checks`도 `/api/sensor-events`처럼 공개 경로로 넣어야 해요. 장치 토큰은 core가 확인해요 (재웅)
 
@@ -925,12 +937,14 @@ CO2:
 ```json
 200
 { "items": [ { "reservationId": 40, "roomId": 2, "roomName": "2번 방", "endedAt": "2026-11-09T14:52:10+09:00",
-               "result": "NEEDS_CLEANING", "items": ["cup", "bottle", "backpack"], "leftItems": ["BAG"],
-               "reportId": 12, "observedAt": "2026-11-09T14:53:00+09:00" } ] }
+               "phase": "RECHECK", "result": "LEFT_ITEMS", "items": [ { "name": "umbrella", "confidence": 0.93 } ],
+               "leftItems": [], "reportId": 12, "observedAt": "2026-11-09T16:53:00+09:00" } ] }
 ```
 
+- 예약 하나에 `FIRST`·`RECHECK`가 따로 한 줄씩 나와요. 11/10 전 기록은 `confidence`가 `null`이고, `result`가 `NEEDS_CLEANING`, `leftItems`(`BAG` 등)가 남아 있을 수 있어요. 새 기록의 `leftItems`는 늘 빈 배열이에요.
+
 - 신고 목록(`GET /api/reports`)에 자동 신고는 `source: "CAMERA"`, 사람 신고는 `source: "USER"`로 나와요(core #81). 카메라 신고는 신고자가 없어서 `reporterReservationId`가 `null`이에요.
-- 신고 증거(`GET /api/reports/{id}/evidence`)의 앞 예약 칸에도 같은 결과를 `tidyCheck`로 붙여요(없으면 `null`, core #110). 예: `"tidyCheck": {"result": "CLEAN", "items": ["chair"], "leftItems": ["BAG"], "observedAt": "2026-11-09T14:53:00+09:00"}`. 사람이 어질러짐을 신고하면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
+- 신고 증거(`GET /api/reports/{id}/evidence`)의 앞 예약 칸에도 **첫 확인(`FIRST`)** 결과를 `tidyCheck`로 붙여요(없으면 `null`, core #110). 다음 팀 신고의 근거는 퇴실 직후 모습이라서요. 이 칸의 `items`는 이름 배열 그대로예요(확신도 없음). 예: `"tidyCheck": {"result": "LEFT_ITEMS", "items": ["umbrella"], "leftItems": [], "observedAt": "2026-11-09T14:53:00+09:00"}`. 사람이 어질러짐을 신고하면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
 
 ## 6-4. 장치 오류 · 방의 사과 (Q-19, core #99)
 
