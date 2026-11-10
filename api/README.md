@@ -47,7 +47,8 @@
 | 화면 | `POST /api/room-watches`, `POST /api/room-watches/{roomId}/cancel` | 빈방 알림 켜기·끄기 (그 방이 비면 알림 한 번) | 11/9 지영 | ✅ develop (core #109) |
 | 키패드·QR | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 (문 앞 웹캠 QR도 같은 API) | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 (CO2에 온도·습도 선택) | FR-DEV-101~104 | ✅ develop · 온도·습도 core #97 |
-| 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·조도·PIR·재실 + 지난 N분 1분 값 | Q-21 | core #97, #106 |
+| 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·재실 + 지난 N분 1분 값 | Q-21 | core #97 |
+| 키패드·QR | `POST /api/device-faults` | 장치 오류 구간·그동안 눌린 번호 알리기 → 장치 탓 노쇼 자동 무르기 | Q-19 | ⏳ core #99 리뷰 중 |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
 | 화면 | `GET /api/penalties/me` | 내 경고 횟수·정지 ("내 경고 0회") | FR-WEB-003 · FR-RPT-104 | ✅ develop (core #92) |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
@@ -856,6 +857,39 @@ CO2:
 
 - 신고 목록(`GET /api/reports`)에 자동 신고는 `source: "CAMERA"`, 사람 신고는 `source: "USER"`로 나와요(core #81). 카메라 신고는 신고자가 없어서 `reporterReservationId`가 `null`이에요.
 - 신고 증거(`GET /api/reports/{id}/evidence`)의 앞 예약 칸에도 같은 결과를 `tidyCheck`로 붙여요(없으면 `null`, core #110). 예: `"tidyCheck": {"result": "CLEAN", "items": ["chair"], "leftItems": ["BAG"], "observedAt": "2026-11-09T14:53:00+09:00"}`. 사람이 어질러짐을 신고하면 관리자가 앞 사람 퇴실 사진과 카메라 결과를 같이 봐요.
+
+## 6-4. 장치 오류 · 방의 사과 (Q-19, ⏳ core #99)
+
+문 장치(QR·키패드 게이트웨이)가 끊겨서 못 들어간 학생이 노쇼 벌칙을 받지 않게 해요. 장치는 끊긴 동안 오류 구간과 그동안 눌린 번호를 모아 뒀다가, 다시 연결되면 같은 `eventId`로 보내요(재실 이벤트처럼 1→2→4…30초 간격 재전송).
+
+### `POST /api/device-faults` — 장치 토큰 필요
+
+```json
+{ "eventId": "qr-1-0005", "roomId": 1, "deviceId": "qr-1", "kind": "SERVER_UNREACHABLE",
+  "startedAt": "2026-11-10T14:00:00+09:00", "endedAt": "2026-11-10T14:20:00+09:00",
+  "attempts": [{ "at": "2026-11-10T14:02:00+09:00", "code": "123456", "via": "QR" }] }
+```
+→ `200 { "result": "STORED" }` · 같은 `eventId`를 다시 보내면 `"result": "DUPLICATE"` (아무것도 안 바뀜)
+
+| 칸 | 값 |
+|---|---|
+| `kind` | `SERVER_UNREACHABLE` 서버 연결 안 됨(와이파이 끊김 포함) · `SERVER_ERROR` 서버 5xx · `DEVICE_RESTART` 꺼졌다 켜진 구간 · `CAMERA_DOWN` QR 카메라 못 읽음 · `KEYPAD_DOWN` 키패드 끊김 |
+| `attempts[]` | 오류 구간 안에 눌린(읽힌) 번호. 없으면 빈 목록. `via`는 `KEYPAD`·`QR`, 최대 100개 |
+
+- 번호는 방마다 24시간에 200개까지 받아요. 넘으면 `429 DEVICE_FAULT_TOO_MANY` (번호 없는 오류 기록은 계속 받아요)
+- 번호가 예약과 맞았는지는 응답에 넣지 않아요. 장치 토큰이 새도 번호를 넣어 보고 맞는지 알아내는 통로가 되지 않게요(키패드 5번 잠금을 거치지 않으니까요). 무른 결과는 학생 알림으로 가요
+- **번호는 저장하지 않아요.** core는 같은 방·그 번호·번호가 맞을 수 있던 시간(시작 10분 전 ~ 입실 마감)의 예약을 찾는 데만 쓰고 예약 id만 남겨요. 키패드 5번 잠금에도 세지 않아요. 장치도 번호를 메모리에만 둬요
+- 찾은 예약이 노쇼면 **노쇼 벌칙 셈에서 빼고**, 그 노쇼 때문에 걸린 이용 정지를 풀고, 대표자·참여자에게 사과 알림(`DEVICE_APOLOGY`)을 보내요. 예약 상태는 기록용으로 `NO_SHOW` 그대로예요
+- 무르기는 이 요청 안에서 하지 않고, 응답을 보낸 뒤 따로 **곧바로**(몇 초 안) 해요. 실패하면 1분 정리가 다시 해요. 번호가 맞을 때만 요청 안에서 일이 늘면 응답 시간 차이로 맞은 번호를 짐작할 수 있어서, 이 요청은 맞든 안 맞든 저장만 하고 응답해요(11/9 지영)
+- 그래서 오류가 노쇼 처리보다 먼저 와도(입실 마감 전에 다시 연결) 장치는 순서를 신경 쓰지 않아도 돼요
+- 번호 없이 시간만 겹치는 노쇼는 누구 예약인지 몰라서 자동으로 무르지 않아요 (관리자 목록은 다음 PR)
+- "문 안 열림"은 지금 문에 잠금장치가 없어(LED만) 보내지 않아요
+
+| 오류 | 상태 | 언제 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | 빠진 값, 모르는 `kind`·`via`, 번호가 6자리 숫자가 아님, 끝 < 시작, 24시간 넘음, 끝이 지금보다 5분 넘게 뒤, 번호 시각이 구간 밖 |
+| `DEVICE_UNAUTHORIZED` | 401 | 장치 토큰 없음·틀림 |
+| `DEVICE_ROOM_MISMATCH` · `DEVICE_ID_MISMATCH` | 403 | 다른 방·다른 장치 토큰 |
 
 ## 7. 비서 (`/api/agent`) — 로그인 필요, assistant `develop`
 
