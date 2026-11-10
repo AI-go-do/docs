@@ -54,6 +54,8 @@
 | 키패드·QR | `POST /api/device-faults` | 장치 오류 구간·그동안 눌린 번호 알리기 → 장치 탓 노쇼 자동 무르기 | Q-19 | ✅ develop (core #99) |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
 | 화면 | `GET /api/penalties/me` | 내 경고 횟수·정지 ("내 경고 0회") | FR-WEB-003 · FR-RPT-104 | ✅ develop (core #92) |
+| 화면 | `GET /api/penalties/me/warnings` | 내 경고 목록 + 철회 요청 상태 (내 예약 "경고 철회 요청 (N일 남음)") | FR-RPT-105 | ⏳ core 요청 |
+| 화면 | `POST /api/warnings/{id}/appeal` | 경고 철회 요청 (받은 뒤 7일 안, 1번) → AI가 다시 비교 | FR-RPT-105 | ⏳ core 요청 |
 | 화면 | `POST /api/agent/chat` | 비서에게 말 보내기 (접수, `202`) | FR-AGT-101 | ✅ develop (assistant) |
 | 화면 | `GET /api/agent/chat/{jobId}` | 비서 답 조회 (폴링) | FR-AGT-101 | ✅ develop (assistant) |
 | 화면 | `DELETE /api/agent/chat/history` | 새 대화 (서버가 기억한 대화 지우기) | FR-AGT-101 | ✅ develop (assistant) |
@@ -724,6 +726,44 @@
 | `limit` · `windowDays` | 위반 경고·허위 신고 경고 각각 `windowDays`일 안 `limit`회면 정지 (3회 · 30일, 설정값) |
 | `suspendedUntil` | 이용 정지(예약·참여, 노쇼 누적 포함) 중이면 끝나는 시각(`+09:00`), 아니면 `null` |
 | `reportSuspendedUntil` | 신고 정지 중이면 끝나는 시각, 아니면 `null` |
+
+### 경고 철회 요청 — 로그인 필요 (FR-RPT-105, ⏳ core 요청 · 모양 제안)
+
+억울한 경고를 받은 학생이 7일 안에 철회를 요청하고, **AI가 근거를 다시 비교**해 철회·유지를 정해요(11/10 재웅: 관리자는 정하지 않음). 아래는 web이 쓰려는 모양 제안이고, 실제 모양은 core(지영)가 정해요. 세부 규칙은 요구사항 Q-24.
+
+#### `GET /api/penalties/me/warnings?days=30` 내 경고 목록
+
+본인 것만, 최근 것부터. 내 예약 화면은 `reservationId`로 지난 예약 카드에 버튼을 붙여요.
+
+```json
+200
+[
+  { "id": 41, "reason": "VIOLATION", "reportType": "MESSY", "roomId": 3,
+    "reservationId": 812, "startAt": "2026-11-08T14:00:00+09:00", "endAt": "2026-11-08T16:00:00+09:00",
+    "createdAt": "2026-11-08T16:12:00+09:00", "why": "퇴실 뒤 방 카메라가 정리 필요로 봤어요",
+    "appealableUntil": "2026-11-15T16:12:00+09:00",
+    "appeal": null }
+]
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `reason` | `VIOLATION`(수칙 위반) · `FALSE_REPORT`(허위 신고) |
+| `reportType` | 걸린 신고 종류 `MESSY`·`WINDOW_OPEN`·`BROKEN`·`NOISE` |
+| `reservationId` | 경고가 걸린 예약. 허위 신고 경고는 신고할 때 쓰던 예약(없으면 `null`) |
+| `appealableUntil` | 요청 마감 = `createdAt` + 7일(설정값) |
+| `appeal` | 아직 안 보냈으면 `null`. 보냈으면 `{ "status": "PENDING" \| "WITHDRAWN" \| "KEPT", "text", "createdAt", "decidedAt", "answer" }` (`answer` = AI 이유 3줄을 학생용 한 문단으로) |
+
+#### `POST /api/warnings/{id}/appeal` 철회 요청 보내기
+
+```json
+{ "text": "퇴실할 때 컵은 다 버렸어요. 다시 봐 주세요.", "evidence": ["CHECKOUT_PHOTO"] }
+```
+
+- `201` → 위 목록의 한 줄(`appeal.status = PENDING`). AI 판단이 끝나면 `WITHDRAWN`·`KEPT`로 바뀌고 알림 `WARNING_APPEAL_RESULT`
+- `text` 10–500자. 전화번호·학번 같은 긴 숫자는 `400 VALIDATION_FAILED` (AI에게 넘어가므로)
+- 남의 경고 `404`, 7일 지남 `409 WARNING_APPEAL_EXPIRED`, 이미 보냄 `409 WARNING_APPEAL_DUPLICATE`
+- core는 판단마다 모델·지시문 버전·결정·확신도·쓴 근거를 남겨요. 정답 세트로 정확도를 재서 표로 내려고요(요구사항 FR-RPT-105 "신뢰도 기록")
 
 ## 6-2. 재실 · CO2 센서
 
