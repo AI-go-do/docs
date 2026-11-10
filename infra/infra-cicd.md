@@ -24,7 +24,7 @@ flowchart LR
     end
 
     phone[학생 폰] --> ngx[학교 nginx<br/>HTTPS] --> gw
-    dev2[키패드 중계 · 재실 센서] --> ngx
+    dev2[QR 입실 장치 · 재실 센서] --> ngx
 ```
 
 ## 2. 기술 스택
@@ -115,7 +115,7 @@ gitGraph
 | 로컬 | 각자 노트북, `docker compose up` | 개발 |
 | 개발 서버 | 학교 실습 서버 (재웅 계정), `develop` | 매일 확인 |
 | 시연 서버 | 학교 실습 서버 (재웅 계정), `main` | 버전 확인·발표 |
-| 현장 | Jetson 보드 B (보드 A 사용 금지) | 센서 · 키패드 · Ollama |
+| 현장 | Jetson 보드 B (보드 A 사용 금지) | 센서 · QR 카메라 · Ollama |
 
 **학교 서버 포트 배정 (배포용, 재웅 범위 8410~8419)**
 

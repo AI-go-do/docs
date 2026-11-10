@@ -1,6 +1,6 @@
 # MVP (v0.1) 서비스별 구조 · API
 
-> ⚠️ **11/4 MVP 시점의 기록이에요.** 포트는 지금 8414(시연)·8413(개발)이고 게이트웨이·비서·Redis가 붙었어요. 지금 구조는 [아키텍처](README.md), 지금 API는 [API 명세](../api/README.md)를 보세요.
+> ⚠️ **11/4 MVP 시점의 기록이에요.** 아래 키패드 입실은 11/10에 빠졌고 지금 입실은 QR만이에요(요구사항 v0.4.35). 포트는 지금 8414(시연)·8413(개발)이고 게이트웨이·비서·Redis가 붙었어요. 지금 구조는 [아키텍처](README.md), 지금 API는 [API 명세](../api/README.md)를 보세요.
 >
 > 2026-11-04 기준 코드: core `develop` d9724f7 (Flyway V1~V5), device `main` 3d4d6b5, infra `main` 8aec2a8, web `develop` 2ef77db + 화면 PR 사슬(#4~#10), assistant `develop` b3de9b7.
 > 요청·응답 본문과 오류 코드 전체는 [API 명세](../api/README.md)에 있어요. 여기서는 **서비스마다 무엇을 열고(제공) 무엇을 부르는지(호출)** 만 봐요.

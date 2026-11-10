@@ -112,7 +112,7 @@ kr.ac.chosun.mspace
 │   ├── application      ← 서비스, 포트(인터페이스)
 │   └── adapter
 │       ├── in/web       ← 컨트롤러, 요청·응답 DTO
-│       └── out          ← DB, 메일, 키패드 구현
+│       └── out          ← DB, 메일, QR 장치 구현
 ├── member
 ├── room
 ├── access
@@ -130,7 +130,7 @@ kr.ac.chosun.mspace
 | 상수 | UPPER_SNAKE | `MAX_DURATION` |
 | 요청·응답 | `…Request` / `…Response` | `CreateReservationRequest` |
 | 포트 | 하는 일 + 없음 | `IdentityVerifier`, `AccessDevice` |
-| 어댑터 | 방식 + 포트 이름 | `EmailIdentityVerifier`, `KeypadAccessDevice` |
+| 어댑터 | 방식 + 포트 이름 | `EmailIdentityVerifier`, `QrAccessDevice` |
 
 ### 코드 규칙
 
@@ -272,7 +272,7 @@ kr.ac.chosun.mspace
 | 입력을 받을 때 (사람·AI가 만든 값) | 화면 입력과 MCP 도구는 오프셋이 없으면 **서울 시간으로 보고 `+09:00`을 붙여서** core에 보낸다. 오프셋이 있으면 그대로 쓴다 |
 | DB | 컬럼은 `timestamptz`. PostgreSQL은 UTC로 저장하고, 읽을 때 순간은 같다. 화면·API 표시는 위 "내보낼 때" 규칙으로 맞춘다 |
 | 서버 시간대 설정 | 코드가 시간대에 기대지 않는 것이 원칙이다. 로그 시각을 읽기 쉽게 하려면 컨테이너에 `TZ=Asia/Seoul`을 둬도 되지만, 이것으로 버그를 가리지 않는다 |
-| 장치 (키패드·센서) | 우노에는 시계가 없다. 장치가 보낸 시각을 믿지 않고 **core가 받은 시각**으로 판단한다 |
+| 장치 (QR 장치·센서) | 우노에는 시계가 없다. 장치가 보낸 시각을 믿지 않고 **core가 받은 시각**으로 판단한다 |
 | 프론트 | 서버가 준 `+09:00` 값을 그대로 보여 준다. 날짜를 만들 때는 `Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul' })`처럼 시간대를 적는다. 브라우저 시간대에 기대지 않는다 |
 | 테스트 | 시각이 들어간 테스트는 결과에 `+09:00`이 있는지 확인한다. CI(GitHub Actions)는 UTC라 서버 시간대에 기댄 코드는 CI에서 깨진다. 노트북에서 확인하려면 `-Duser.timezone=UTC`로 한 번 돌린다 |
 

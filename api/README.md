@@ -48,10 +48,10 @@
 | 화면 | `POST /api/notifications/read-all` | 내 알림 모두 읽음 | FR-NTF-103 | ✅ develop |
 | 화면 | `GET /api/room-watches/me` | 오늘 켜 둔 빈방 알림 | 11/9 지영 | ✅ develop (core #109) |
 | 화면 | `POST /api/room-watches`, `POST /api/room-watches/{roomId}/cancel` | 빈방 알림 켜기·끄기 (그 방이 비면 알림 한 번) | 11/9 지영 | ✅ develop (core #109) |
-| 키패드·QR | `POST /api/access/verify` | 6자리 번호 확인 → 문 열기 (문 앞 웹캠 QR도 같은 API) | FR-ACC-001 | ✅ develop |
+| QR | `POST /api/access/verify` | 입실 QR 안 번호 확인 → 문 열기 (11/10부터 QR만, 키패드·NFC 뺌) | FR-ACC-001 | ✅ develop |
 | 재실·CO2 센서 | `POST /api/sensor-events` | 방에 사람이 있는지, CO2 값 알리기 (CO2에 온도·습도 선택) | FR-DEV-101~104 | ✅ develop · 온도·습도 core #97 |
 | 관리자 | `GET /api/admin/rooms/environment?minutes=60` | "지금" 탭: 방별 CO2·온도·습도·재실 + 지난 N분 1분 값 | Q-21 | ✅ develop (core #97, #106) |
-| 키패드·QR | `POST /api/device-faults` | 장치 오류 구간·그동안 눌린 번호 알리기 → 장치 탓 노쇼 자동 무르기 | Q-19 | ✅ develop (core #99) |
+| QR | `POST /api/device-faults` | 장치 오류 구간·그동안 읽힌 번호 알리기 → 장치 탓 노쇼 자동 무르기 | Q-19 | ✅ develop (core #99) |
 | 화면 | `GET /api/rules` | 이용 규칙 | FR-WEB-003 | ✅ develop |
 | 화면 | `GET /api/penalties/me` | 내 경고 횟수·정지 ("내 경고 0회") | FR-WEB-003 · FR-RPT-104 | ✅ develop (core #92) |
 | 화면 | `GET /api/penalties/me/warnings` | 내 경고 목록 + 철회 요청 상태 (내 예약 "경고 철회 요청 (N일 남음)") | FR-RPT-105 | ⏳ core #111 요청 |
@@ -75,7 +75,7 @@
 | 로그인 | `Authorization: Bearer <accessToken>`. 없거나 틀리면 `401 UNAUTHORIZED` |
 | 개발용 임시 헤더 | `X-User-Id: <회원 id>`. core를 `MSPACE_DEV_HEADER=true`로 띄웠을 때만 받아요. 운영에서는 꺼요. 토큰이 있으면 토큰만 봐요 |
 | 만든 곳 | 비서는 예약 만들기(`POST /api/reservations`, `/instant`)에 `X-Created-Via: AGENT`를 붙여요. 그러면 `created_via = AGENT`, 없으면 `WEB`. 대소문자와 앞뒤 공백은 무시해요(` agent `도 AGENT). `WEB`·`AGENT` 말고 다른 값이면 `400 INVALID_REQUEST`. 건수를 따로 세는 표시일 뿐 권한과는 상관없어요 (core #45) |
-| 장치 | 키패드·센서는 사람 토큰이 아니라 장치 토큰(`Authorization: Bearer <장치 토큰>`)을 써요. 토큰은 장치마다 따로 두고 방·장치 이름에 묶여요(core #91, 아래 6장) |
+| 장치 | QR 장치·센서는 사람 토큰이 아니라 장치 토큰(`Authorization: Bearer <장치 토큰>`)을 써요. 토큰은 장치마다 따로 두고 방·장치 이름에 묶여요(core #91, 아래 6장) |
 | 시각 | 서울 시간 ISO-8601 `+09:00` (예: `2026-11-03T14:00:00+09:00`). 토큰 만료 시각(`expiresAt`)만 UTC `Z`. 보낼 때 오프셋이 없으면(`2026-11-03T14:00`) `400 INVALID_REQUEST`, `Z`로 보내면 받고 응답은 `+09:00`으로 줘요 |
 | 예약 칸 | 정각·30분 단위, 1회 최대 2시간, 오늘부터 7일 안 |
 | 오류 본문 | 모두 `{"code": "RESERVATION_TIME_TAKEN", "message": "이미 예약된 시간입니다"}`. 화면은 `message`를 그대로 보여 줘도 돼요 |
@@ -290,7 +290,7 @@
 
 - 끝은 30분 칸이고, 최대 (지금 + 2시간)을 30분 칸으로 올린 시각까지예요. 14:17에 누르면 16:30까지 고를 수 있어요.
 - 다음 예약이 있으면 그 전까지만 돼요(아니면 `409 RESERVATION_TIME_TAKEN`).
-- 10분 안에 키패드로 입실하지 않으면 노쇼예요.
+- 10분 안에 QR로 입실하지 않으면 노쇼예요.
 - 오류는 `POST /api/reservations`와 같아요. 다만 끝이 30분 칸이 아니면 `RESERVATION_NOT_ON_SLOT`("끝 시각은 정각 또는 30분이어야 합니다"), 길이가 틀리면 `RESERVATION_INVALID_LENGTH`("지금 바로 쓰기는 지금부터 16:30까지 고를 수 있습니다")가 나가요.
 - 미리 예약에 쓴 `Idempotency-Key`를 여기 다시 쓰면 `409 IDEMPOTENCY_KEY_REUSED`예요.
 
@@ -639,12 +639,14 @@
 
 `POST /api/relay/offers/{id}/decline` 넘길게요 → `204` (내 것이 아니거나 이미 끝났으면 `404 RELAY_OFFER_NOT_FOUND`)
 
-## 6. 출입 (키패드 · QR)
+## 6. 출입 (QR)
+
+> **11/10 재웅 결정: 입실은 QR로만 해요.** 키패드·NFC는 빼요. 장치는 QR에서 읽은 번호를 `code`로 보내요. 지금 core 코드는 `keypad-` 장치와 `KEYPAD`·`KEYPAD_DOWN` 값을 아직 받아요. 지울지는 요구사항 Q-29(지영·수연)에서 정해요.
 
 ### `POST /api/access/verify` — 장치 토큰 필요
 
 ```json
-{ "eventId": "1-48213-18", "roomId": 1, "deviceId": "keypad-1", "code": "123456" }
+{ "eventId": "1-48213-18", "roomId": 1, "deviceId": "qr-1", "code": "123456" }
 ```
 문 앞 웹캠 QR 입실(device #26)도 이 API를 그대로 불러요. 폰 화면의 입실 QR(`MSPACE:<방>:<6자리>`, 예약 응답 `qrText`)에서 6자리만 꺼내 `code`로 보내요. 다른 방 QR은 장치가 서버에 묻지 않고 거절해요.
 
@@ -670,7 +672,7 @@
 | `DEVICE_ID_MISMATCH` | 403 | 토큰에 등록된 장치 이름과 `deviceId`가 다름 |
 | `INVALID_REQUEST` | 400 | `eventId`·`roomId` 빠짐, 길이 넘음 |
 
-장치 토큰 (core #91, 11/7): core `.env`의 `MSPACE_DEVICES`에 `deviceId:roomId:토큰`을 쉼표로 이어 적어요(예: `keypad-1:1:<토큰>,qr-1:1:<토큰>`). 같은 방 장치끼리는 토큰 하나를 같이 써도 되고, 다른 방끼리는 안 돼요. 센서(6-2장)와 방 카메라(6-3장)도 같은 규칙이에요. 예전 공용 토큰 `MSPACE_DEVICE_TOKEN`은 장치를 하나씩 옮기는 동안만 모든 방에 받아요.
+장치 토큰 (core #91, 11/7): core `.env`의 `MSPACE_DEVICES`에 `deviceId:roomId:토큰`을 쉼표로 이어 적어요(예: `qr-1:1:<토큰>,qr-2:2:<토큰>`). 같은 방 장치끼리는 토큰 하나를 같이 써도 되고, 다른 방끼리는 안 돼요. 센서(6-2장)와 방 카메라(6-3장)도 같은 규칙이에요. 예전 공용 토큰 `MSPACE_DEVICE_TOKEN`은 장치를 하나씩 옮기는 동안만 모든 방에 받아요.
 
 ## 6-1. 이용 규칙
 
@@ -1176,5 +1178,5 @@ PUT  { "style": "NAGGING" } → 같은 모양
 | 무엇 | 지금 | 할 일 |
 |---|---|---|
 | springdoc `/swagger-ui` | 컨벤션에만 있고 core에 의존성 없음 | core에 추가하면 이 문서는 요약본으로 줄이기 |
-| 입실 방식 NFC · QR | 8차 회의(11/6): 시험용 방 1실에서 키패드 → NFC → QR. 지금 API는 키패드(6장)만 | 요구사항 Q-16이 정해지면 6장에 방식별 모양 추가(지영·수연) |
+| 입실 방식 | **11/10 결정: QR만**(키패드·NFC 뺌). API는 6장 하나 그대로 | core에 남은 키패드 값 정리(요구사항 Q-29, 지영·수연) |
 | 증거 사진 | core #76 머지됨, 응답 예시는 아직 없음 (5장 "관리자 화면용 API") | 응답 예시 추가 |
