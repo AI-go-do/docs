@@ -863,8 +863,8 @@ CO2:
 
 **두고 간 물건 흐름 (11/10 지영·수연, core #112).** 예약 하나에 확인이 **두 번**까지 있어요.
 1. 첫 확인(`FIRST`): 예약이 끝나면 바로 봐요. 남은 물건이 있으면(`LEFT_ITEMS`, 쓰레기 포함, 종류 구분 없음) 대표자·참여자에게 **알림만** 가요. 신고·경고는 없어요.
-2. 다시 확인(`RECHECK`): 첫 확인이 `LEFT_ITEMS`였으면 **퇴실 2시간 뒤**에 다시 봐요(`current.recheck`가 알려 줘요). 그때도 확신도 0.8 이상 물건이 남아 있으면 core가 바로 어질러짐 신고를 사실로 정하고 **대표자에게 경고**를 줘요.
-3. 퇴실 뒤 2시간 안에 **다음 팀이 입실하면 다시 보지 않고 경고도 없어요**(누구 물건인지 갈리지 않음).
+2. 다시 확인(`RECHECK`): 첫 확인이 `LEFT_ITEMS`였으면 **퇴실 3시간 뒤**에 다시 봐요(`current.recheck`가 알려 줘요). 그때도 확신도 0.8 이상 물건이 남아 있으면 core가 바로 어질러짐 신고를 사실로 정하고 **대표자에게 경고**를 줘요.
+3. 퇴실 뒤 3시간 안에 **다음 팀이 입실하면 다시 보지 않고 경고도 없어요**(누구 물건인지 갈리지 않음).
 
 ### `GET /api/rooms/{roomId}/current` 지금 예약·방금 끝난 예약 — 장치 토큰 필요
 
@@ -884,7 +884,7 @@ CO2:
 | `current` | 지금 시간에 걸린 예약(`BOOKED` 입실 전 또는 `IN_USE`). 없으면 `null` |
 | `lastEnded` | 이 방에서 가장 최근에 끝난 예약. `status`는 `CHECKED_OUT`(직접 퇴실·강제 퇴실) `AUTO_CHECKED_OUT`(시간 종료) `AWAY_RELEASED`(자리 비움). 입실 안 한 예약(`NO_SHOW`·`CANCELED`)은 방에 아무도 없었으니 넣지 않아요. 없으면 `null` |
 | `endedAt` | 실제로 나간 시각(`checked_out_at`) |
-| `recheck` | 다시 확인할 예약. `lastEnded` 예약의 첫 확인이 `LEFT_ITEMS`이고, 아직 다시 확인이 없고, 그 뒤 이 방에 아무도 입실하지 않았을 때만 줘요. 아니면 `null`. `at` = 퇴실 시각 + 2시간(`mspace.tidy.recheck-after-minutes`, 기본 120) |
+| `recheck` | 다시 확인할 예약. `lastEnded` 예약의 첫 확인이 `LEFT_ITEMS`이고, 아직 다시 확인이 없고, 그 뒤 이 방에 아무도 입실하지 않았을 때만 줘요. 아니면 `null`. `at` = 퇴실 시각 + 3시간(`mspace.tidy.recheck-after-minutes`, 기본 180) |
 
 - 예약자 이름·학번은 주지 않아요(장치에 필요 없음).
 - 오류: `401` 토큰 문제, `404 ROOM_NOT_FOUND`.
@@ -907,14 +907,14 @@ CO2:
 | `eventId` | 글자 1~64자 | 센서와 같아요. 같은 값을 다시 보내면 `DUPLICATE`로 한 번만 처리 |
 | `reservationId` | 정수 | `current`의 `lastEnded.reservationId` |
 | `deviceId` | 글자 50자 이하 | 보낸 장치(`camera-방번호`) |
-| `phase` | `FIRST` · `RECHECK`, 없으면 `FIRST` | 퇴실 직후 첫 확인 / 2시간 뒤 다시 확인 |
+| `phase` | `FIRST` · `RECHECK`, 없으면 `FIRST` | 퇴실 직후 첫 확인 / 3시간 뒤 다시 확인 |
 | `result` | `CLEAN` · `LEFT_ITEMS` | 남은 것 없음 / 남은 물건 있음(쓰레기 포함, 종류 구분 없음). 예전 값 `NEEDS_CLEANING`은 400 |
 | `items` | **필수**, 0~20개. `CLEAN`이면 빈 배열, `LEFT_ITEMS`면 1개 이상 | 깨끗한 빈 방보다 늘어난 물건. `name`은 모델이 내는 영어 이름 그대로(1~50자), `confidence`는 확신도 0~1(필수). 방에 원래 있는 물건(리모컨 등)은 빠져요 |
 | `observedAt` | 시각, 오프셋 필수(`+09:00` 권장, `Z`도 받음) | 확인한 시각. 오프셋이 없으면 400 |
 
 **core가 하는 일**
-- `FIRST` + `LEFT_ITEMS` → 그 예약의 대표자·참여자 모두에게 알림 `LEFT_ITEM`(제목 "두고 간 물건이 있어요", 내용 예 "2번 방에 umbrella·bottle을(를) 두고 가신 것 같아요. 2시간 안에 챙겨 가 주세요."). 물건이 많으면 "외 N개"로 줄여 300자 안에 맞춰요. 신고·경고는 없어요. 예전처럼 어질러짐 신고를 자동으로 만들지 않아요.
-- `RECHECK` + 확신도 0.8 이상(`mspace.tidy.warn-min-confidence`, 모델 비교 뒤 조정) 물건이 하나라도 있음 → 그 방에 어질러짐(`MESSY`) 신고를 만들고(신고자 없음, `source: CAMERA`, 내용 "방 카메라 자동 확인: 퇴실 뒤 다시 봐도 남은 물건 umbrella(0.93)") **같은 트랜잭션에서 사실(`CONFIRMED`)로 정해요**(판정한 관리자 없음). 이 예약의 **대표자에게 경고**가 가요(FR-RPT-104 규칙 그대로, 이유 "두고 간 물건을 2시간 안에 챙겨 가지 않았어요."). 0.8 아래 물건만 남았으면 기록만 해요.
+- `FIRST` + `LEFT_ITEMS` → 그 예약의 대표자·참여자 모두에게 알림 `LEFT_ITEM`(제목 "두고 간 물건이 있어요", 내용 예 "2번 방에 umbrella·bottle을(를) 두고 가신 것 같아요. 3시간 안에 챙겨 가 주세요."). 물건이 많으면 "외 N개"로 줄여 300자 안에 맞춰요. 신고·경고는 없어요. 예전처럼 어질러짐 신고를 자동으로 만들지 않아요.
+- `RECHECK` + 확신도 0.8 이상(`mspace.tidy.warn-min-confidence`, 모델 비교 뒤 조정) 물건이 하나라도 있음 → 그 방에 어질러짐(`MESSY`) 신고를 만들고(신고자 없음, `source: CAMERA`, 내용 "방 카메라 자동 확인: 퇴실 뒤 다시 봐도 남은 물건 umbrella(0.93)") **같은 트랜잭션에서 사실(`CONFIRMED`)로 정해요**(판정한 관리자 없음). 이 예약의 **대표자에게 경고**가 가요(FR-RPT-104 규칙 그대로, 이유 "두고 간 물건을 3시간 안에 챙겨 가지 않았어요."). 0.8 아래 물건만 남았으면 기록만 해요.
 - 판정 위치(Q-28)의 AI 어댑터가 아직 없어서, 지금은 core가 위 기준으로 바로 정해요.
 
 | 오류 | 상태 | 언제 |
@@ -926,7 +926,7 @@ CO2:
 | `TIDY_CHECK_NOT_LATEST` | 409 | 이 방에서 **가장 최근에 끝난 예약**(`lastEnded`)이 아님. 장치 토큰이 공용이라 지난 예약에 신고를 만들지 못하게 막아요 |
 | `TIDY_CHECK_EXISTS` | 409 | 이 예약에 같은 `phase` 결과가 다른 `eventId`로 이미 있거나, 같은 `eventId`를 다른 예약·`phase`에 씀 |
 | `TIDY_RECHECK_NOT_NEEDED` | 409 | `RECHECK`인데 다시 볼 것이 없음(첫 확인이 없거나 `CLEAN`), 또는 퇴실 뒤 이 방에 다음 팀이 입실함 |
-| `TIDY_RECHECK_TOO_EARLY` | 409 | `RECHECK`인데 지금 시각이나 `observedAt`이 `recheck.at`(퇴실 + 2시간)보다 이름 |
+| `TIDY_RECHECK_TOO_EARLY` | 409 | `RECHECK`인데 지금 시각이나 `observedAt`이 `recheck.at`(퇴실 + 3시간)보다 이름 |
 
 - API 게이트웨이: 장치 토큰은 JWT가 아니라서 `/api/rooms/{roomId}/current`, `/api/rooms/{roomId}/tidy-checks`도 `/api/sensor-events`처럼 공개 경로로 넣어야 해요. 장치 토큰은 core가 확인해요 (재웅)
 
